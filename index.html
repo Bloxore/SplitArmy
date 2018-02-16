@@ -128,7 +128,7 @@
                 this.x = x;
                 this.y = y;
                 this.mpBuild = 10;
-                this.mpUse = 10;
+                this.actionStatus = "start";
                 this.zIndex = 1;
                 this.type = type;
                 this.bN = buildings.length;
@@ -138,7 +138,21 @@
                         ctx.drawImage(graphics,16,16,32,16,this.x,this.y,32,16);
                         ctx.drawImage(graphics,48,16,32,16,this.x,this.y+16,32,16);
                         mpBuild = 10;
-                        mpUse = 5;
+                    }
+                }
+                this.action = function() {
+                    /* Cancel request if action is already in progress */
+                    if (this.actionStatus == "progress" || this.actionStatus == "complete")
+                        return;
+                    this.actionStatus = "progress";
+                    if (this.type == "t") {
+                      var range = 30;
+                      for (var i=0; i < enemyGroups.length; i++) {
+                          if (Math.sqrt(Math.pow(enemyGroups[i].x - this.x,2)+Math.pow(enemyGroups[i].y - this.y,2)) < range) {
+                              enemyGroups[i].members.splice(0,Math.ceil(enemyGroups[i].members.length/10));
+                          }
+                      }
+                      this.actionStatus = "complete";
                     }
                 }
                 this.kill = function() {
@@ -613,7 +627,7 @@
 
             function turnSwitch(player) {
                 if (player == true) {
-                    turn = "player";
+                    turn = "buildings";
                     add(new Message("PLAYER TURN",120,90));
                     /* Reset all groups */
                     for (var i=0;i<groups.length;i++) {
@@ -689,6 +703,8 @@
                         gameEnemyUpdate();
                     else if (turn == "player")
                         gameUpdate();
+                    else if (turn == "buildings")
+                        gameBuildingsUpdate();
                 } else if (state == MENU_STATE) {
                     menuUpdate();
                 }
@@ -728,7 +744,7 @@
                             txt = "Moving Group";
                         } else if (attackGroup != null) {
                             txt = "Select Enemy Group to Attack"
-                        } else if (turn == "player") {
+                        } else if (turn == "player" || turn == "buildings") {
                             txt = "Player's Turn";
                         } else if (turn == "enemy") {
                             txt = "Enemy's Turn";
@@ -856,6 +872,25 @@
                         if (totalActions == 0)
                             turnSwitch(false);
                     }
+            }
+
+            function gameBuildingsUpdate() {
+                /* Disable mouse click during buildings' actions */
+                mouse.click = false;
+                if (message != false)
+                  return;
+                for (var i=0; i < buildings.length; i++) {
+                  if (buildings[i].actionStatus == "start")
+                    buildings[i].action();
+
+                  if (buildings[i].actionStatus != "complete")
+                    return;
+                }
+
+                /* Once all building actions are complete switch control to player and reset buildings*/
+                for (var i=0; i < buildings.length; i++)
+                  buildings[i].actionStatus = "start";
+                turn = "player";
             }
 
             function gameEnemyUpdate() {
