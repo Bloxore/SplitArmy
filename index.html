@@ -1,0 +1,1282 @@
+<html>
+    <head>
+        <style>
+            img {
+                display: none;
+            }
+            canvas {
+                -ms-interpolation-mode: nearest-neighbor;
+                image-rendering: -webkit-optimize-contrast;
+                image-rendering: -webkit-crisp-edges;
+                image-rendering: -moz-crisp-edges;
+                image-rendering: -o-crisp-edges;
+                image-rendering: pixelated;
+                /*width: 100%;
+                height: auto;*/
+            }
+            html, body {
+                margin: 0;
+            }
+            #f {
+                width: 70px;
+                height: 70px;
+                position: absolute;
+                background-color: black;
+                top: 480px;
+            }
+            #game {
+                position: absolute;
+                width: 480px;
+                height: 480px;
+                display: block;
+                overflow: hidden;
+            }
+            #game *{
+                position: absolute;
+                top:0;
+                left: 0;
+                display: block;
+                margin: auto;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="f"></div>
+        <div id="game"></div>
+    </body>
+    <!--Javascript code starts here !-->
+    <script>
+        var COLORS = ["#332c50","#46878f","#94e344","#e2f3e4"];
+        var fullscreen = false;
+        window.onload = function() {
+            /* Game div */
+            var gmdiv = document.getElementById("game");
+            /* Background layer */
+            var bgc = gmdiv.appendChild(document.createElement("CANVAS"));
+            bgc.width = 480;
+            bgc.height = 480;
+            var bgctx = bgc.getContext("2d");
+            /*Pixel Perfect*/
+            bgctx.imageSmoothingEnabled = false;
+            /*Scale up game*/
+            bgctx.scale(2,2);
+            /* Foreground layer */
+            var c = gmdiv.appendChild(document.createElement("CANVAS"));
+            c.width = 480;
+            c.height = 480;
+            var ctx = c.getContext("2d");
+            /*Pixel Perfect*/
+            ctx.imageSmoothingEnabled = false;
+            /*Scale up game*/
+            ctx.scale(2,2);
+            
+            /* Assign graphics their own variable */
+            var graphics = document.getElementById("g");
+            
+            var objects = [];
+            var objId = 0;
+            var mouse = {x:0,y:0,down:false,click:false};
+            var deltaTime = Date.now();
+            var frames = 0;
+            var fps = 60;
+            var debug = true;
+            var fx = {};
+            var CIRCLE_TRANSITION = 0x0001;
+            var FADE = 0x0010;
+            var FLASH = 0x0100;
+            
+            /* Game variables */
+            var GAME_STATE = 1;
+            var MENU_STATE = 2;
+            var groups;
+            var enemyGroups;
+            var whichEnemy;
+            var movingGroup;
+            var message;
+            var buildings;
+            var bMActive;
+            var turn;
+            var attackGroup;
+            var state;
+            var level;
+            
+            function Troop(x,y,frame) {
+                this.x = x;
+                this.y = y;
+                this.zIndex = 1;
+                this.frame = frame;
+                this.group = 1;
+                this.goto = null;
+                this.draw = function() {
+                    ctx.drawImage(graphics,frame*16,0,Math.floor(16),Math.floor(16),this.x,this.y,16,16);
+                }
+                this.update = function() {
+                    if (this.goto != null) {
+                        this.x += Math.floor(this.goto[0] - this.x)/3;
+                        this.y += Math.floor(this.goto[1] - this.y)/3;
+                        if (this.x == this.goto[0] && this.y == this.goto[1])
+                            this.goto = null;
+                    }
+                }
+            }
+            /* Building ideas:
+            Attack tower
+            Make more guys building
+            Wall to stall for time
+            */
+            function Building(x,y,type) {
+                this.x = x;
+                this.y = y;
+                this.mpBuild = 10;
+                this.mpUse = 10;
+                this.zIndex = 1;
+                this.type = type;
+                this.bN = buildings.length;
+                buildings.push(this);
+                this.draw = function() {
+                    if (this.type = "t") {
+                        ctx.drawImage(graphics,16,16,32,16,this.x,this.y,32,16);
+                        ctx.drawImage(graphics,48,16,32,16,this.x,this.y+16,32,16);
+                        mpBuild = 10;
+                        mpUse = 5;
+                    }
+                }
+                this.kill = function() {
+                    buildings.splice(this.bN,1);
+                    remove(this);
+                }
+            }
+            
+            function BuildingMenu(group) {
+                this.zIndex = 100;
+                var items = ["t","t","t","t","t","t"];
+                var descriptions = [
+                    "Attack Tower\n[10 MP]\nProvide assualt\nwithout risk at\nthe cost of MP."
+                ]
+                this.buildings = []
+                for (var i=0;i<items.length;i++) {
+                    this.buildings.push(add(new Building(20+55*(i%4),90*(Math.floor(i/4)+1) - 50,items[i])));     
+                }
+                this.hover = null;
+                this.draw = function() {
+                    this.update();
+                    ctx.textAlign = "center";
+                    ctx.strokeStyle = COLORS[0];
+                    ctx.lineWidth = 10;
+                    ctx.fillStyle = COLORS[3];
+                    ctx.beginPath();
+                    ctx.rect(0,0,240,240);
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.lineWidth = 2;
+                    ctx.fillStyle = COLORS[1];
+                    ctx.font = "bold 18px Arial"
+                    ctx.fillText("Building Menu",120,24);
+                    ctx.font = "bold 6px Arial"
+                    for (var i=0;i<items.length;i++) {
+                        this.buildings[i].draw(); 
+                        if (descriptions[i]) {
+                            ctx.fillStyle = COLORS[1];
+                            var text = descriptions[i].split("\n");
+                            for (var t=0;t<text.length;t++) {
+                               if (t==0)
+                                   ctx.font = "bold 7px Arial";
+                                else
+                                   ctx.font = "bold 6px Arial";
+                                ctx.fillText(text[t],this.buildings[i].x+16,this.buildings[i].y + 40 + 10*t);
+                            }
+                        }
+                    }
+                    /* Back Button */
+                    ctx.drawImage(graphics,80,16,16,16,14,10,16,16);
+                    /* Flavor text */
+                    ctx.fillText("Group's MP: " + group.members.length,120,230);
+                    ctx.textAlign = "left";
+                    if (this.hover != null) {
+                        ctx.beginPath();
+                        ctx.rect(this.hover.x-11,this.hover.y-5,56,90);
+                        ctx.stroke();
+                    }
+                }
+                this.update = function() {
+                    bMActive = true;
+                    /* Check mouse position around each time and draw
+                    a rectangle around it if selected */
+                    this.hover = null;
+                    if (this.buildings)
+                    for (var i=0;i<this.buildings.length;i++) {
+                        if (mouse.x > this.buildings[i].x-10 && mouse.x < this.buildings[i].x + 42 && mouse.y > this.buildings[i].y-5 && mouse.y < this.buildings[i].y + 85) {
+                            this.hover = {x:this.buildings[i].x,y:this.buildings[i].y};
+                            /* If clicked place build */
+                            if (mouse.click && group.members.length >= this.buildings[i].mpBuild) {
+                                mouse.click = false;
+                                group.actions -= 1;
+                                /* Not to be confused with this.buildings (this is the global array) */
+                                buildings.push(add(new Building(group.x - 8,group.y,this.buildings[i].type)));
+                                group.goto = [group.x,group.y + 46];
+                                this.close();
+                            }
+                        }
+                    }
+                    /* Close menu if click on back button */
+                    if (mouse.x > 14 && mouse.x < 30 && mouse.y > 10 && mouse.y < 26 && mouse.click) {
+                        this.close();
+                    }
+                }
+                this.close = function() {
+                    for (var i=0;i<this.buildings.length;i++) {
+                        remove(this.buildings[i]);  
+                    }
+                    remove(this);
+                    bMActive = false;
+                }
+            }
+            function Group(x,y,enemy) {
+                this.zIndex = 3;
+                this.x = x;
+                this.y = y;
+                this.range = [x,y,16];
+                if (enemy) {
+                    this.enemy = enemy;
+                    this.zIndex = 2;
+                } else {
+                    this.enemy = false;
+                }
+                this.members = [];
+                this.group = "A";
+                this.goto = null;
+                this.list = null;
+                this.rangeAngle = 0;
+                this.actions = 3;
+                this.drawMembers = function() {
+                    
+                }
+                this.draw = function() {
+                    this.update();
+                    for (var i=0;i<this.members.length;i++){
+                        this.members[i].update();
+                        this.members[i].x += this.x;
+                        this.members[i].y += this.y;
+                        this.members[i].draw();
+                        this.members[i].x -= this.x;
+                        this.members[i].y -= this.y;
+                    }
+                    ctx.lineWidth = 2;
+                    if (enemy == true) {
+                        ctx.beginPath();
+                        ctx.strokeStyle = COLORS[0];
+                        ctx.rect(this.x-12,this.y-12,40,40);
+                        ctx.stroke();
+                        /*Group info*/
+                        ctx.beginPath();
+                        ctx.fillStyle = COLORS[0];
+                        ctx.rect(this.x + 16,this.y + 19,12,10);
+                        ctx.fill();
+                        /*Info text*/
+                        ctx.fillStyle = COLORS[3];
+                        ctx.font = "bold 8px Arial"
+                        ctx.fillText(this.members.length,this.x + 17,this.y + 26.5);
+                    } else {
+                        /*Circle around group*/
+                        ctx.beginPath();
+                        ctx.strokeStyle = COLORS[0];
+                        ctx.arc(this.x+8,this.y+8,24,0,Math.PI*2);
+                        ctx.stroke();
+                        /*Group info*/
+                        ctx.beginPath();
+                        ctx.fillStyle = COLORS[0];
+                        ctx.rect(this.x + 6,this.y + 22,30,10);
+                        ctx.fill();
+                        /* Action counter */
+                        ctx.beginPath();
+                        ctx.arc(this.x - 10,this.y - 10,5,0,Math.PI*2);
+                        ctx.fill();
+                        /*Info text*/
+                        ctx.fillStyle = COLORS[3];
+                        ctx.font = "bold 8px Arial"
+                        ctx.fillText(this.group + ": " + this.members.length,this.x + 6.5,this.y + 30);
+                        ctx.fillText(this.actions,this.x-12.75,this.y-7);
+                    }
+                }
+                this.update = function() {
+                    if (movingGroup == null) {
+                            this.range = [this.x,this.y,32+ Math.log(this.members.length)*16]
+                    }
+                    if (mouse.click == true && mouse.x > this.x - 20 && mouse.x < this.x + 32 && mouse.y > this.y - 20 && mouse.y < this.y + 32) {
+                        if (enemy != true) {
+                            /* Create action command list */
+                            if (this.list == null && movingGroup == null && this.actions > 0 && message == false && bMActive == false && attackGroup == null && !fx.type) {
+                                /* Delete all other group's lists, but be sure the group exists first.*/
+                                for (var i=0;i<groups.length;i++) {
+                                    if (groups[i].list != null && groups[i].list.active == -1) {
+                                        remove(groups[i].list);
+                                        groups[i].list = null;
+                                    }
+                                    if (groups[i].list != null && groups[i].list.active != -1)
+                                        return;
+                                }
+                                /* Disable click */
+                                mouse.click = false;
+                                this.list = add(new List(mouse.x - 5,mouse.y - 5,this));
+                            }
+                        } else {
+                            /* For enemy groups only */
+                            if (attackGroup != null) {
+                                /* Initiate attack */
+                                var distance = Math.sqrt(Math.pow((this.x - attackGroup.x),2)+Math.pow((this.y - attackGroup.y),2));
+                                if (distance < 48) {
+                                    enemyLength = this.members.length;
+                                    this.members.splice(0,attackGroup.members.length);
+                                    attackGroup.actions -= 1;
+                                    /* Attacking group also takes loses */
+                                    attackGroup.members.splice(0,enemyLength/2);
+                                    shuffleGroup(attackGroup,12);
+                                    shuffleGroup(this,12);
+                                    attackGroup = null;
+                                }
+                            }
+                        }
+                    }
+                    /* Delete dead groups */
+                    if (this.members.length < 1){
+                        remove(this); 
+                        if (this.enemy == true) {
+                            for (var i=0;i<enemyGroups.length;i++) {
+                                if (enemyGroups[i].ID == this.ID)
+                                    enemyGroups.splice(i,1);
+                            }   
+                        } else {
+                            for (var i=0;i<groups.length;i++) {
+                                if (groups[i].ID == this.ID)
+                                    groups.splice(i,1);
+                            }
+                        }
+                    }
+                    if (this.goto != null) {
+                        this.x += (this.goto[0] - this.x)/3;
+                        this.y += (this.goto[1] - this.y)/3;
+                        if (Math.round(this.x) == Math.round(this.goto[0]) && Math.round(this.y) == Math.round(this.goto[1]))
+                            this.goto = null;
+                    }
+                    if (this.enemy == false) {
+                        if (this.x > 240)
+                            this.goto = [220,this.y];
+                        else if (this.x < 0)
+                            this.goto = [20,this.y];
+                        if (this.y > 240)
+                            this.goto = [this.x,220];
+                        else if (this.y < 0)
+                            this.goto = [this.x,20];
+                    }
+                }
+                this.split = function() {
+                    if (this.members.length < 2)
+                        return;
+                    /*Split the group, reposition and shuffle it*/
+                    if (enemy == true) {
+                        var newGroup = shuffleGroup(pushGroup(this.x, this.y,true),12);
+                    } else {
+                        if (groups.length >= 4)
+                            return;
+                       var newGroup = shuffleGroup(pushGroup(this.x, this.y),12); 
+                    }
+                    newGroup.members = this.members.splice(this.members.length/2,this.members.length/2);
+                    newGroup.goto = [this.x - 26, this.y];
+                    this.goto = [this.x + 26,this.y]
+                    shuffleGroup(this,12);
+                    this.actions -= 1;
+                    newGroup.actions = this.actions;
+                }
+            }
+            
+            function List(x,y,group) {
+                this.zIndex = 99;
+                this.x = x;
+                this.y = y;
+                this.items = ["Split","Move","Build","Attack","Rest"];
+                this.active = null;
+                this.group = group;
+                /* If list is off screen, move it */
+                if (this.x + 50 > 240) {
+                    this.x -= 40;
+                }
+                if (this.y + 70 > 240) {
+                    this.y -= 60;
+                }
+                this.inactive = [0,0,0,0,0];
+                var distances = [];
+                var target = 0;
+                /* disable attack if no enemies are nearby */
+                for (var i=0; i < enemyGroups.length; i++) {
+                    distances[i] = Math.sqrt(Math.pow(enemyGroups[i].x - group.x,2)+Math.pow(enemyGroups[i].y - group.y,2));
+                    if (distances[i-1] && distances[i] < distances[i-1])
+                        target = i;
+                }
+                if (distances[target] > 48) {
+                    this.inactive[3] = 1;
+                }
+                /* Disable split if there are more than four groups*/
+                if (groups.length >= 4)
+                    this.inactive[0] = 1;
+                this.draw = function () {
+                    this.update();
+                    ctx.beginPath();
+                    ctx.fillStyle = COLORS[0];
+                    ctx.rect(this.x,this.y,50,70);
+                    ctx.fill();
+                    if (this.active != -1 && this.inactive[this.active] == 0) {
+                        ctx.beginPath();
+                        ctx.fillStyle = COLORS[1];
+                        ctx.rect(this.x,this.y + this.active*(70/5),50,70/5);
+                        ctx.fill();
+                    }
+                    ctx.fillStyle = COLORS[3];
+                    ctx.font = "bold 11px Arial"
+                    for (var i=0;i<this.items.length;i++) {
+                        if (this.inactive[i] == 1) {
+                           ctx.fillStyle = COLORS[1]; 
+                        }
+                        ctx.fillText(this.items[i],this.x + 2,this.y + (70/5) * i + 11);
+                        if (this.inactive[i] == 1) {
+                           ctx.fillStyle = COLORS[3]; 
+                        }
+                    }
+                }
+                this.update = function() {
+                    if (mouse.x > this.x && mouse.x < this.x + 50 && mouse.y > this.y && mouse.y < this.y + 70) {
+                        this.active = Math.floor((mouse.y - this.y) / (70/5));
+                    } else {
+                        this.active = -1;
+                    }
+                    if (mouse.click) {
+                        mouse.click = false;
+                        if (this.inactive[this.active] == 0) {
+                            if (this.active == 0) {
+                                this.group.split();
+                            } else if (this.active == 1) {
+                                movingGroup = group;
+                            } else if (this.active == 2) {
+                                add(new BuildingMenu(this.group));
+                            } else if (this.active == 3) {
+                                attackGroup = group;
+                            } else if (this.active == 4) {
+                                this.group.actions = 0;
+                            }
+                        }
+                        /* List is removed whether action occurs or not
+                        Unless it is an inactive item
+                        */
+                        if (this.inactive[this.active] == 0 || this.active == -1) {
+                            remove(this);
+                            this.group.list = null;   
+                        }
+                    }
+                }
+            }
+            
+            function Message(text,y,length,callBack) {
+                this.zIndex = 101;
+                this.text = text;
+                this.y = y;
+                if (length)
+                    this.length = length;
+                else 
+                    this.length = -1;
+                this.height = 0;
+                this.step = 1;
+                this.draw = function() {
+                    message = true;
+                    ctx.fillStyle = COLORS[0];
+                    ctx.beginPath();
+                    ctx.rect(0,this.y,240,this.height);
+                    ctx.fill();
+                    if (this.step == 1) {
+                        this.height += 5;
+                        this.y -= 2.5;
+                        if (this.height >= 50) 
+                            this.step = 2;
+                    }
+                    if (this.step == 2) {
+                        this.length -= 1;
+                        ctx.fillStyle = COLORS[3];
+                        ctx.font = "bold 24px Arial"
+                        ctx.fillText(this.text,10,this.y + 32);
+                        if (this.length <= 1 && this.length > 0)
+                            this.step = 3;
+                        if (this.length < 0 && mouse.click)
+                            this.step = 3;
+                    }
+                    if (this.step == 3) {
+                        this.height -= 5;
+                        this.y += 2.5;
+                        if (this.height <= 0) {
+                            this.step = 4;
+                            message = false;
+                            remove(this);
+                            this.draw = null;
+                            if (callBack)
+                                callBack();
+                            return;
+                        }
+                    }
+                }
+            }
+            
+            
+            
+            function pushGroup(x,y,enemy) {
+                var newGroup = add(new Group(x, y,enemy));
+                if (enemy == true) {
+                    enemyGroups.push(newGroup);
+                } else {
+                    groups.push(newGroup);
+                    newGroup.group = String.fromCharCode(65 + groups.length-1);
+                }
+                return newGroup;
+            }
+            
+            function add(obj,last) {
+                obj.ID = objId++;
+                objects.push(obj);
+                return obj;
+            }
+            
+            function remove(obj) {
+                if (obj.ID != null)
+                    for (var i=0;i<objects.length;i++) {
+                        if (obj.ID == objects[i].ID) {
+                            objects.splice(i,1);
+                            return obj;
+                        }
+                    }
+                return null;
+            }
+            /*Game Start Code*/
+            function gameStart() {
+                switchState(MENU_STATE);
+                bgDraw();
+            }
+            
+            function switchState(newState) {
+                objects = [];
+                groups = [];
+                enemyGroups = [];
+                whichEnemy = 0;
+                movingGroup = null;
+                attackGroup = null;
+                message = false;
+                buildings = [];
+                bMActive = false;
+                c.style.cursor = "default";
+                state = newState;
+            }
+            
+            function beginLevel() {
+                switchState(GAME_STATE);
+                turn = "player";
+                /* Switch background */
+                bgDraw();
+                /* Start turn after flash */
+                startFX(FLASH,{complete: () => {
+                    if (state == GAME_STATE)
+                        turnSwitch(true);
+                }, time: 20});
+                if (level == 1) {
+                    /* Create player */
+                    shuffleGroup(createTroops(20,0,0,pushGroup(110,110)),12);
+                    /* Create Enemies */
+                    shuffleGroup(createTroops(10,0,0,pushGroup(20,110,true)),12);
+                    shuffleGroup(createTroops(10,0,0,pushGroup(200,200,true)),12);
+                } else if (level == 2) {
+                    shuffleGroup(createTroops(10,0,0,pushGroup(50,50)),12);
+                    shuffleGroup(createTroops(10,0,0,pushGroup(200,200)),12);
+                    shuffleGroup(createTroops(5,0,0,pushGroup(110,110,true)),12);
+                    shuffleGroup(createTroops(15,0,0,pushGroup(300,300,true)),12);
+                } else if (level == 3) {
+                    //Players
+                    shuffleGroup(createTroops(50,0,0,pushGroup(100,50)),12);
+                    //Enemies
+                    shuffleGroup(createTroops(70,0,0,pushGroup(-50,300,true)),12);
+                } else {
+                    /* PANIC! This is an error. Just reset game */
+                    gameStart();
+                }
+            }
+            
+            function enemyTurn() {
+                /* If there are no enemies, don't bother */
+                if (enemyGroups.length < 1) {
+                    turnSwitch(true);
+                    return;
+                }
+            }
+            
+            function turnSwitch(player) {
+                if (player == true) {
+                    turn = "player";
+                    add(new Message("PLAYER TURN",100,90));
+                    /* Reset all groups */
+                    for (var i=0;i<groups.length;i++) {
+                        if (groups[i])
+                        groups[i].actions = 3;   
+                    }
+                } else {
+                    whichEnemy = 0;
+                    turn = "enemy";
+                    add(new Message("ENEMY TURN",100,90,enemyTurn));
+                    for (var i=0;i<enemyGroups.length;i++) {
+                        if (enemyGroups[i])
+                            enemyGroups[i].actions = 3;   
+                    }
+                }
+            }
+            
+            function createTroops(num,x,y,group) {
+                for (var i=0;i<num;i++) {
+                    if (group.enemy == true) {
+                        group.members.push(new Troop(x,y,6));
+                    } else {
+                        group.members.push(new Troop(x,y,Math.floor(Math.random() * 6)));   
+                    }
+                }
+                return group;
+            } 
+            
+            /* Fun extra visual function (can be cut for more space) */
+            function shuffleGroup(group,magnitude) {
+                for (var i=0;i<group.members.length;i++) {
+                    group.members[i].goto = [Math.random() * magnitude*2 - magnitude,Math.random() * magnitude*2 - magnitude]
+                }
+                return group;
+            }
+            
+            function sortObjects() {
+                /* Sort buildings */
+                if (buildings)
+                do {
+                    error = false;
+                    for (var i=0;i<buildings.length-1;i++) {
+                        if (buildings[i].y < buildings[i+1].y) {
+                            var temp = buildings[i];
+                            buildings[i] = buildings[i+1];
+                            buildings[i+1] = temp;
+                            error = true;
+                        }
+                        buildings[i].zIndex = 1 - i/10;
+                    }
+                } while (error == true);
+                
+                /* Sort every other sprite */
+                var error = false;
+                do {
+                    error = false;
+                    for (var i=0;i<objects.length-1;i++) {
+                        if (objects[i].zIndex > objects[i+1].zIndex) {
+                            var temp = objects[i];
+                            objects[i] = objects[i+1];
+                            objects[i+1] = temp;
+                            error = true;
+                        }
+                    }
+                } while (error == true);
+            }
+            var sineOffset = 0;
+            function draw() {
+                requestAnimationFrame(draw);
+                /* STATE MANAGER */
+                if (state == GAME_STATE) {
+                    if (turn == "enemy")
+                        gameEnemyUpdate();
+                    else if (turn == "player")
+                        gameUpdate();
+                } else if (state == MENU_STATE) {
+                    menuUpdate();
+                }
+                sortObjects();
+                ctx.clearRect(0,0,480,480);
+                /*Sprites*/
+                for (var i=0;i<objects.length;i++) {
+                    objects[i].draw();
+                }
+                
+                /*Game State specific stuff */
+                if (state == GAME_STATE) {
+                    /* Border around range */
+                    if (movingGroup != null) {
+                        ctx.beginPath();
+                        for (var i=0;i<20;i++) {
+                            var startAngle = (Math.PI*2/20)*i + movingGroup.rangeAngle;
+                            var endAngle = startAngle + Math.PI*2/40
+                            ctx.moveTo(movingGroup.range[0] + Math.cos(startAngle)*movingGroup.range[2],movingGroup.range[1] + Math.sin(startAngle)*movingGroup.range[2]);
+                            ctx.arc(movingGroup.range[0],movingGroup.range[1],movingGroup.range[2],startAngle,endAngle);
+                        }
+                        ctx.stroke();
+                        movingGroup.rangeAngle += Math.PI / 100;
+                    }
+
+                    /* HUD */
+                    if (bMActive == false) {
+                        ctx.fillStyle = COLORS[1];
+                        ctx.strokeStyle = COLORS[0];
+                        ctx.beginPath();
+                        ctx.rect(-2,-2,244,16);
+                        ctx.fill();  
+                        ctx.stroke();
+                        ctx.textAlign = "center";
+                        var txt;
+                        if (movingGroup != null) {
+                            txt = "Moving Group";
+                        } else if (attackGroup != null) {
+                            txt = "Select Enemy Group to Attack"
+                        } else if (turn == "player") {
+                            txt = "Player's Turn";
+                        } else if (turn == "enemy") {
+                            txt = "Enemy's Turn";
+                        } else {
+                            txt = "";
+                        }
+                        ctx.font = "bold 8px Arial";
+                        ctx.fillStyle = COLORS[3];
+                        ctx.fillText(txt,120,10);
+                        ctx.textAlign = "left";
+                    }
+                } else if (state == MENU_STATE) {
+                    /*Sine wave*/
+                    var flag = {x: 25, y: 90,period: 1.5,size: 50,width:80,wave: 5};
+                    flag.y = flag.y - flag.wave*Math.sin((((sineOffset)/flag.width-1)*(Math.PI*2))/flag.period);
+                    ctx.beginPath();
+                    ctx.fillStyle = COLORS[3];
+                    for (var s=0;s<2;s++) {
+                        if (s==0)
+                            ctx.moveTo(flag.x,(flag.y + s*flag.size)+flag.wave*Math.sin((((sineOffset)/flag.width-1)*(Math.PI*2))/flag.period));
+                        else if (s==1)
+                            ctx.lineTo(flag.x+flag.width-1,flag.y+flag.size + flag.wave*Math.sin((((sineOffset+flag.width-1)/flag.width-1)*(Math.PI*2))/flag.period));
+                        for (var i=0;i<flag.width;i++) {
+                            if (s==0)
+                                ctx.lineTo(flag.x+i,(flag.y + s*flag.size)+flag.wave*Math.sin((((i+sineOffset)/flag.width-1)*(Math.PI*2))/flag.period));
+                            if (s==1)
+                                ctx.lineTo(flag.x+flag.width-1-i,(flag.y + s*flag.size)+flag.wave*Math.sin((((flag.width-i+sineOffset)/flag.width-1)*(Math.PI*2))/flag.period));
+                        }
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    sineOffset--;
+                }
+                
+                /*Release mouse click event*/
+                mouse.click = false;
+                
+                /* If fx are active then draw them */
+                if (fx != {}) {
+                    fxDraw();
+                }
+                
+                /* Debug FPS 
+                if (debug) {
+                    frames++;
+                    if (Date.now() - deltaTime >= 1000) {
+                        deltaTime = Date.now();
+                        fps = frames;
+                        frames = 0;
+                    }
+                    ctx.fillStyle = "#FF0000"; 
+                    ctx.font = "bold 8px Arial";
+                    ctx.textAlign = "left";
+                    ctx.fillText("FPS: "+fps,0,10); 
+                }*/
+            }
+            
+            /* Run this function if all the player groups die */
+            function gameOver() {
+                turn = "gameOver";
+                add(new Message("GAME OVER!",100,-1, gameStart));
+            }
+            
+            function win() {
+                turn = "win";
+                level++;
+                add(new Message("STAGE CLEAR",100,-1, () => {
+                    startFX(FADE,{complete: beginLevel, time: 20});
+                }));
+            }
+            
+            function gameUpdate() {
+                /* Move group if appropiate */
+                if (movingGroup != null) {
+                    distance = Math.sqrt(Math.pow((movingGroup.range[0] - mouse.x),2) + Math.pow((movingGroup.range[1] - mouse.y),2));
+                    if (distance < movingGroup.range[2]) {
+                        movingGroup.goto = [mouse.x - 8,mouse.y - 8];
+                    } else {
+                        var angle = Math.atan(((mouse.y - 8) - movingGroup.range[1])/((mouse.x - 8) - movingGroup.range[0]));
+                        
+                        var direction = [1,1];
+                        if ((mouse.x - 8) - movingGroup.range[0] < 0) {
+                            direction[0] = -1;
+                            direction[1] = -1;
+                        }
+                            
+                        
+                        movingGroup.goto = [movingGroup.range[0]-8 + Math.cos(angle)*movingGroup.range[2]*direction[0],movingGroup.range[1]-8 + Math.sin(angle)*movingGroup.range[2]*direction[1]];
+                    }
+                    if (mouse.click) {
+                        movingGroup.actions -= 1;
+                        mouse.click = false;
+                        movingGroup = null;
+                    }
+                }
+                /* Check if player groups are still alive */
+                var alive = false;
+                for (var i=0;i<groups.length;i++) {
+                    if (groups[i] != null)
+                        alive = true
+                }
+                if (alive == false) {
+                    gameOver();
+                    return;
+                }
+                
+                /* Check if enemy groups are still alive */
+                alive = false;
+                for (var i=0;i<enemyGroups.length;i++) {
+                    if (enemyGroups[i] != null)
+                        alive = true
+                }
+                if (alive == false) {
+                    win();
+                    return;
+                }
+                
+                /* End turn when all actions are used up */
+                if (groups && turn == "player")
+                    if (groups.length > 0) {
+                        var totalActions = 0;
+                        for (var i=0;i<groups.length;i++)
+                            if (groups[i])
+                                totalActions += groups[i].actions;
+                        if (totalActions == 0)
+                            turnSwitch(false);
+                    }
+            }
+            
+            function gameEnemyUpdate() {
+                var e = enemyGroups[whichEnemy];
+                if (message == false && enemyGroups[whichEnemy] && enemyGroups[whichEnemy].goto == null) {
+                    /* This is the enemy AI
+                        Priorities:
+                        1) Move towards enemy
+                        2) Attack when in range
+                    */
+                    
+                    /* Priority 1:
+                    Move enemy towards player 
+                    Determine closest player and move maximum range towards it. Move just close enough to attack
+                    Goal: Choose weakest and closest group to move towards and attack
+                    */
+                    /* Determine what to advance on */
+                    var distances = [];
+                    var target = 0;
+                    for (var i=0; i < groups.length; i++) {
+                        distances[i] = Math.sqrt(Math.pow(groups[i].x - e.x,2)+Math.pow(groups[i].y - e.y,2));
+                        if (distances[i-1] && distances[i] < distances[i-1])
+                            target = i;
+                    }
+                    if (Math.floor(distances[target]) > 42) {
+                        if (distances[target] > e.range[2] && distances[target] - e.range[2] > 42) {
+                            var ratio = e.range[2] / distances[target];
+                            e.goto = [];
+                            e.goto[0] = (groups[target].x - e.x)*ratio + e.x;
+                            e.goto[1] = (groups[target].y - e.y)*ratio + e.y;
+                            e.actions -= 1;
+                            return;
+                        } else {
+                            var direction = [groups[target].x - e.x,groups[target].y - e.y];
+                            direction = [-Math.abs(direction[0])/direction[0],-Math.abs(direction[1])/direction[1]];
+                            if (isNaN(direction[0]))
+                                direction[0] = 0;
+                            if (isNaN(direction[1]))
+                                direction[1] = 0; 
+                            
+                            var angle = Math.atan(-(e.y - groups[target].y) / (e.x - groups[target].x));
+                            e.goto = [groups[target].x + Math.abs(42*Math.cos(angle))*direction[0],groups[target].y + Math.abs(42*Math.sin(angle))*direction[1]]; 
+                            e.actions -= 1;
+                            return;
+                        }
+                    }
+                    
+                    /* Priority 2 
+                    Attack the closest player group
+                    */
+                    if (e.actions > 0 && groups[target]) {
+                        var counter = groups[target].members.length;
+                        groups[target].members.splice(0,e.members.length);
+                        
+                        e.members.splice(0,counter / 2);
+                        
+                        shuffleGroup(e,12);
+                        shuffleGroup(groups[target],12);
+                        
+                        e.actions -= 1;
+                        return;
+                    }
+                    
+                    
+                    /* If no other actions can be done rest */
+                    e.actions = 0;
+                }
+                if (enemyGroups[whichEnemy] && e.actions == 0 || enemyGroups[whichEnemy] == null && message == false)
+                    whichEnemy++;
+                
+                /* Check to see if there are any players still standing */
+                if (groups.length == 0) {
+                    gameOver();
+                    return;
+                }
+                
+                /* Check if enemy groups are still alive */
+                if (enemyGroups.length == 0) {
+                    win();
+                    return;
+                }
+                
+                if (message == false && whichEnemy == enemyGroups.length) {
+                    turnSwitch(true);
+                }
+            }
+            
+            /* Update logic for the main menu */
+            function menuUpdate() {
+                /* Click the start button */
+                if (mouse.x > 165 -52 && mouse.x < 165+52 && mouse.y > 168 && mouse.y < 202) {
+                    c.style.cursor = "pointer";
+                    if (mouse.click && !fx.type) {
+                        level = 1;
+                        startFX(CIRCLE_TRANSITION,{complete: beginLevel});
+                        c.style.cursor = "default";
+                    }
+                } else {
+                    c.style.cursor = "default";
+                }
+            }
+            
+            /*
+                Types and Options:
+                1) Circle Transition:
+                    - Speed
+                    - Density
+                    - Complete
+                2) Fade
+                    - Color
+                    - Time
+                    - Complete
+                3) Flash
+                    - Color
+                    - Time
+                    - Complete
+            */
+            function startFX(type,options) {
+                fx = {type: type, options: options};
+                if (type == CIRCLE_TRANSITION) {
+                    if (options.density == null)
+                        options.density = 5;
+                    if (options.speed == null)
+                        options.speed = 5;
+                    fx.circles = [];
+                    /* Build the 2d array */
+                    for (var i=0;i<options.density;i++)
+                        fx.circles[i] = [];
+                    /* p = y cord, i = x cord */
+                    for (var p=0;p<options.density;p++)
+                        for (var i=0;i<options.density;i++)
+                            fx.circles[i][p] = 0;
+
+                    fx.radius = 0;
+                }
+                if (type == FADE) {
+                    if (options.color == null)
+                        options.color = COLORS[0];
+                    if (options.time == null)
+                        options.time = 100;
+                    fx.opacity = 0;
+                }
+                if (type == FLASH) {
+                    if (options.color == null)
+                        options.color = COLORS[0];
+                    if (options.time == null)
+                        options.time = 100;
+                    fx.opacity = 1;
+                }
+            }
+            
+            function fxDraw() {
+               if (fx.type === CIRCLE_TRANSITION) {
+                   /* p = y cord, i = x cord */
+                   var separation = 240 / fx.options.density;
+                   var finished = true;
+                    for (var p=0;p<fx.options.density;p++)
+                        for (var i=0;i<fx.options.density;i++) {
+                            /* Don't grow circles forever */
+                            if (fx.circles[i][p] < separation) {
+                                finished = false;
+                            }
+                            if (Math.sqrt(Math.pow(p*separation-120+separation/2,2)+Math.pow(i*separation-120+separation/2,2)) <= fx.radius) {
+                                fx.circles[i][p]++;
+                            }
+                            /* If the circle's radius is more than 0 draw it*/
+                            if (fx.circles[i][p] > 0) {
+                                ctx.fillStyle = COLORS[0];
+                                ctx.beginPath()
+                                ctx.arc(i*separation+separation/2,p*separation+separation/2,fx.circles[i][p],0,Math.PI*2);
+                                ctx.fill();
+                            }
+                        }
+                    fx.radius+= fx.options.speed;
+                   if (finished == true) {
+                       var complete = fx.options.complete;
+                       fx = {}
+                       if (complete)
+                           complete();
+                   }
+                }
+                /* Fade transition */
+                else if (fx.type == FADE) {
+                    ctx.beginPath();
+                    ctx.globalAlpha = fx.opacity;
+                    ctx.fillStyle = fx.options.color;
+                    ctx.rect(0,0,c.width/2,c.height/2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                    fx.opacity += 1/fx.options.time;
+                    /* When complete */
+                    if (fx.opacity >= 1) {
+                        var complete = fx.options.complete;
+                        fx = {}
+                        if (complete)
+                            complete();
+                    }
+                }
+                /* Flash effect */
+                else if (fx.type == FLASH) {
+                    ctx.beginPath();
+                    ctx.globalAlpha = fx.opacity;
+                    ctx.fillStyle = fx.options.color;
+                    ctx.rect(0,0,c.width/2,c.height/2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                    fx.opacity -= 1/fx.options.time;
+                    /* When complete */
+                    if (fx.opacity <= 0) {
+                        var complete = fx.options.complete;
+                        fx = {}
+                        if (complete)
+                            complete();
+                    }
+                }
+            }
+            
+            /* Background layer doesn't have to be drawn every frame */
+            function bgDraw() {
+                bgctx.clearRect(0,0,480,480);
+                if (state == GAME_STATE) {
+                    /*Background*/
+                    for (var r=0;r<240/16;r++) {
+                        for (var c=0;c<240/16;c++) {
+                            bgctx.drawImage(graphics,0,16,16,16,c*16,r*16,16,16);
+                        }
+                    }
+                } else if (state == MENU_STATE) {
+                    /* Title Menu */
+                    /* Background */
+                    bgctx.fillStyle = COLORS[1];
+                    bgctx.beginPath();
+                    bgctx.rect(0,0,240,120);
+                    bgctx.fill();
+                    bgctx.fillStyle = COLORS[2];
+                    bgctx.beginPath();
+                    bgctx.rect(0,120,240,120);
+                    bgctx.fill();
+                    /* Sun (even though it looks like a moon)*/
+                    bgctx.fillStyle = COLORS[3];
+                    bgctx.beginPath();
+                    bgctx.arc(200,43,25,0,Math.PI*2);
+                    bgctx.fill();
+                    /*Castle Begin*/
+                    bgctx.fillStyle = COLORS[0];
+                    bgctx.beginPath();
+                    bgctx.rect(100,70,130,70);
+                    bgctx.fill();
+                    bgctx.beginPath();
+                    bgctx.rect(100,50,20,20);
+                    bgctx.fill();
+                    bgctx.beginPath();
+                    bgctx.rect(100,50-20/3,20/3,20/3);
+                    bgctx.fill();
+                    bgctx.beginPath();
+                    bgctx.rect(100+40/3,50-20/3,20/3,20/3);
+                    bgctx.fill();
+                    bgctx.beginPath();
+                    bgctx.rect(210,50-20/3,20/3,20/3);
+                    bgctx.fill();
+                    bgctx.beginPath();
+                    bgctx.rect(210+40/3,50-20/3,20/3,20/3);
+                    bgctx.fill();
+                    
+                    bgctx.beginPath();
+                    bgctx.rect(165-15,20,30,50);
+                    bgctx.fill();
+                    
+                    bgctx.beginPath();
+                    bgctx.rect(165-15,20-30/3,30/3,30/3);
+                    bgctx.fill();
+                    
+                    bgctx.beginPath();
+                    bgctx.rect(165-15 + 60/3,20-30/3,30/3,30/3);
+                    bgctx.fill();
+                    
+                    /*Right Arm*/
+                    bgctx.beginPath();
+                    bgctx.moveTo(180,50);
+                    bgctx.lineTo(190,40);
+                    bgctx.lineTo(190,20);
+                    bgctx.lineTo(200,20);
+                    bgctx.lineTo(200,50);
+                    bgctx.lineTo(180,60);
+                    bgctx.closePath();
+                    bgctx.fill();
+                    /* Left Arm */
+                    bgctx.beginPath();
+                    bgctx.moveTo(150,50);
+                    bgctx.lineTo(140,40);
+                    bgctx.lineTo(140,20);
+                    bgctx.lineTo(130,20);
+                    bgctx.lineTo(130,50);
+                    bgctx.lineTo(150,60);
+                    bgctx.closePath();
+                    bgctx.fill();
+                    
+                    bgctx.beginPath();
+                    bgctx.rect(210,50,20,20);
+                    bgctx.fill();
+                    
+                    /*Flag pole*/
+                    bgctx.beginPath();
+                    bgctx.rect(20,85,5,130);
+                    bgctx.fill();
+                    
+                    /* Start Button */
+                    var bP = {x: 165 - 50, y: 170}
+                    bgctx.strokeStyle = COLORS[3];
+                    bgctx.lineWidth = 2;
+                    bgctx.fillStyle = COLORS[2];
+                    bgctx.beginPath();
+                    bgctx.rect(bP.x,bP.y,100,30);
+                    bgctx.fill();
+                    bgctx.stroke();
+                    bgctx.fillStyle = COLORS[1];
+                    bgctx.beginPath();
+                    bgctx.rect(bP.x - 1,bP.y + 31,102,5);
+                    bgctx.fill();
+                    bgctx.fillStyle = COLORS[1];
+                    bgctx.textAlign = "center";
+                    bgctx.font = "bold 18px Arial";
+                    bgctx.fillText("Start",bP.x + 50,bP.y + 22);
+                    
+                    /*Title text*/
+                    bgctx.shadowColor = COLORS[2];
+                    bgctx.shadowOffsetY = 2;
+                    bgctx.font = "bold 32px Arial";
+                    bgctx.textAlign = "center";
+                    bgctx.fillStyle = COLORS[3];
+                    bgctx.fillText("Split",47,33);
+                    bgctx.fillText("Army",47,63);
+                    bgctx.shadowOffsetY = 0;
+                }
+            }
+            
+            /* Extra Stuff */
+            document.getElementById("f").onclick = function() {
+                if (fullscreen == false) {
+                    if (gmdiv.webkitRequestFullscreen)
+                        gmdiv.webkitRequestFullscreen();
+                    if (gmdiv.requestFullscreen)
+                        gmdiv.requestFullscreen();
+                    if (gmdiv.mozRequestFullScreen)
+                        gmdiv.mozRequestFullScreen();
+                    if (gmdiv.msRequestFullscreen)
+                        gmdiv.msRequestFullscreen();
+                } else {
+                    if (document.exitFullscreen) 
+	                   document.exitFullscreen();
+                    if (document.webkitExitFullscreen)
+                        document.webkitExitFullscreen();
+                    if (document.mozCancelFullScreen)
+                        document.mozCancelFullScreen();
+                    if (document.msExitFullscreen) 
+                        document.msExitFullscreen();
+                }
+            }
+            /* Resize Canvas for fullscreen-ness */
+            function FShandler() {
+                var canvases = gmdiv.childNodes;
+                if (fullscreen == false) {
+                    fullscreen = true;
+                    if (window.screen.width > window.screen.height) {
+                        gmdiv.style.height = screen.height;
+                        gmdiv.style.width = screen.height;
+                        gmdiv.style.margin = "auto";
+                        for (var i=0; i<canvases.length;i++){
+                            canvases[i].style.width = screen.height;
+                            canvases[i].style.height = screen.height;
+                            if (gmdiv.offsetWidth > screen.height)
+                                canvases[i].style.left = screen.width/2 - screen.height/2;
+                        }
+                    } else {
+                        gmdiv.style.width = screen.width;
+                        gmdiv.style.height = screen.width;
+                        gmdiv.style.margin = "auto";
+                        for (var i=0; i<canvases.length;i++){
+                            canvases[i].style.width = screen.width;
+                            canvases[i].style.height = screen.width;
+                            if (gmdiv.offsetHeight > screen.width)
+                                canvases[i].style.top = screen.height/2 - screen.width/2;
+                        }
+                    }
+                } else {
+                    fullscreen = false;
+                    gmdiv.style.width = c.width;
+                    gmdiv.style.height = c.width;
+                    gmdiv.style.margin = 0;
+                    for (var i=0; i<canvases.length;i++){
+                            canvases[i].style.width = c.width;
+                            canvases[i].style.height = c.width;
+                            canvases[i].style.left = 0;
+                            canvases[i].style.top = 0;
+                    }
+                }
+            }
+            document.addEventListener("fullscreenchange", FShandler);
+            document.addEventListener("webkitfullscreenchange", FShandler);
+            document.addEventListener("mozfullscreenchange", FShandler);
+            document.addEventListener("MSFullscreenChange", FShandler);
+            
+            document.onmousemove = function (e) {
+                var rect = c.getBoundingClientRect();
+                mouse.x = Math.round((e.clientX-rect.left)/(rect.right-rect.left)*c.width/2);
+                mouse.y = Math.round((e.clientY-rect.top)/(rect.bottom-rect.top)*c.height/2);
+            }
+            document.onmousedown = function (e) {mouse.down = true; mouse.click = true;}
+            document.onmouseup = function (e) {mouse.down = false;}
+            document.addEventListener("touchstart", function (e) {mouse.down = false; mouse.click = true;}, false);
+            document.addEventListener("touchend", function(e) {mouse.down = true;}, false);
+            
+            /*Start game*/
+            draw();
+            gameStart();
+        }
+    </script>
+</html>
+<!-- 
+opengameart.org
+Videlais for the tile sheet
+darkagent for players and enemies
+!-->
+<img id="g" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAAAgCAYAAADKbvy8AAAF2klEQVRoge1ZMWsjRxT+JiSdiwORa3L5A0YGgwyHKjXGwXFiawtDQDbkDkEKb5Hr4l9w5TWb4kDEBnkhIDjp4jjGxo0qNScIWOQPOL7CiSCFm3DFpJBmNTv7ZnZmtWtf4D4Qu5rZnXkz37z3vpkFPuADPuD+wDjn8QLG7smUGSrlOgeQMKTUqPHz/WeZDVTHKsAYA+ccjDFUynU+HPXIPkx194WPdRXLixv89z9OmLjaNFYp18UtNVMMAIajnq1tiTbGYd/2XSeo5FFEmep0mC5EAEBRxJMELi9u8Ie7q1jDKgeA5TasSRToDoLo3qv6mQ18cnqLg/WF6GqDtecvEuSbPFdEHWmSmTz5okx5hoS8iEuNGlr+NppBB5UQUVRJW8RE39p+EwQuL26QccbBEzkANIMOVW67CBgMXpyGzZ2TRNn5vmXPE3AAKDVqACLPd7GfA0DL38arv3fQ8o/gWbZRKde5vPgFvCpIz9eG0Jv2haWtNPIKd8LrbL0PADYfHCbKfDxy6rfUqEVjkO9d3te1p4OOPGAS0SgStQQ+3F3FTfsiuloitnJlOK5iWm1YrmAqZOuEUV4QeRSS7c2gg5Z/pEajVDso+3XEfqQWiDApSBNX1xwI0KEsDZVynYsFUGrUop/4T+UHBQyY5E75CgfyhqMek71lHPZdRQgbh32Mwz68qg9xb2sD5b06JAgEkmRlIQ8AfjnayPJaLsgSegUIb6VETQRVxU5FCgNik8+Gox6EkjX13/K3Y4u35W9rn02E0KmK4jLrlfATLgywQR75T80ZplVoej9L/gIipRiRKKlLW3AgNhepoXM46jGvCt4dBAnSvKpPRgEqB0arY3PnRPaiQnMIMAuf1ITLgqIS0ooMmEz82vMXMfJKjRrO959Z26Hu91w38GIcLX8bXtVHdxBEW4m0dgSJVDn1vFbEAJlCoE7+y/UkKuU6n+SrExyEC2pbDIBar4UgW726QJ6wuzp9EaF19/gf/PbzVlT+5Tevga8nddYqNIcwKHdkzB8rSx7vDgJsPv4OzbN/hefI7/CJjPbx5PQ21QvfFzSDDkqNGrUnTkDeQkzGOROAB+sPMKuLj5sUMVMw6XdfmKd/plwLA3GSA2AiRm7aF4l8ZrvwbAQY5YFznYK4Yjp4tvn4XdTnTftCVb6xvJBB1t8phqMeW26/483p/2bQocaUeEeMUdr6QPwXe0N13Iw6N3TB2Q/fxxpcWfLQHQQ2bTJ5w2r7zucLn2krr26vuRyuhICRQZWp5aoAkp+ZhrLIjpUljzJFN5YEgW8uu9rx6CB/MTKKmHnQDDraPDqdhMSxkenQW3cSoUJWq1mgs9lSE6QtQlmU5YLCCFRXsXwV5Orq59nDiXdMCtSGJOr9lEURkScEV8qzuZBYGIHy5M97zeJNaujTtWMKl1QbGsTIs0QuJOZOoMhlpgnR3evqxmEfMBwnyVAnehz28eirJfz566XxPYpEsm2DHTJ5OiLn+TZKIRIx4tRFOX1JhSpiZCGR1ycl5TxQK2SK6Fu2AUDCjpUljwNOnhcj8c1l19kLSRGThTwdxEpWV3UWLxT/vZkCJHF1ex0TEDqPcumXKtuqPsXrwU+J/vcOz/Djt19o7SsKsRCa19cDVXy43lP/bfLgVvUpAODTxrrxuay59a/wVFv39uUx9oCIxL3Ds1h9UeQWImKoCUrzvjQxYZMHBXGmhUHZaVuWtjBkEt++PI5X/p8IVKW8QJr36aR/mrjQ2WBqw+Th1GKyzamCxLuCFYFZBI6LNHfJSXlA52V59SV7n4u4yQLTYXYEW/KEkHBRgLabdfnD6NXttfaZPNUnlcuJ9ufZy829D8z1LFTI+LwlPJCQ8YmtRJF9q3bINkzPQrVzqHrg3uGZ7KHsvT0LnSdUOp6CaPvOkst0Nqa8q/2QrapRmTyjIZbInUDdIF3FgLZdhxOZIvKnASSJCTU6ezafTosIoUAxJyHU5xy571w7TIccQlXc2eek/wBR7ixL2+eQugAAAABJRU5ErkJggg==" alt="" />
