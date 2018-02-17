@@ -146,7 +146,7 @@
                     if (this.actionStatus == "progress" || this.actionStatus == "complete")
                         return;
                     this.actionStatus = "progress";
-                    targetSprite(this,60,() => {
+                    targetSprite(this,1000,() => {
                       if (this.type == "t") {
                         var range = 30;
                         for (var i=0; i < enemyGroups.length; i++) {
@@ -541,10 +541,9 @@
 
             /* Simple timer */
             function Timer(time,callBack) {
-              this.time = time;
+              this.time = Date.now() + time;
               this.draw = function() {
-                this.time--;
-                if (this.time <= 0) {
+                if (Date.now() >= this.time) {
                   if (callBack)
                     callBack();
 
