@@ -97,6 +97,7 @@
             var bMActive;
             var turn;
             var attackGroup;
+            var targetedSprite;
             var state;
             var level;
 
@@ -145,15 +146,17 @@
                     if (this.actionStatus == "progress" || this.actionStatus == "complete")
                         return;
                     this.actionStatus = "progress";
-                    if (this.type == "t") {
-                      var range = 30;
-                      for (var i=0; i < enemyGroups.length; i++) {
-                          if (Math.sqrt(Math.pow(enemyGroups[i].x - this.x,2)+Math.pow(enemyGroups[i].y - this.y,2)) < range) {
-                              enemyGroups[i].members.splice(0,Math.ceil(enemyGroups[i].members.length/10));
-                          }
+                    targetSprite(this,60,() => {
+                      if (this.type == "t") {
+                        var range = 30;
+                        for (var i=0; i < enemyGroups.length; i++) {
+                            if (Math.sqrt(Math.pow(enemyGroups[i].x - this.x,2)+Math.pow(enemyGroups[i].y - this.y,2)) < range) {
+                                enemyGroups[i].members.splice(0,Math.ceil(enemyGroups[i].members.length/10));
+                            }
+                        }
+                        this.actionStatus = "complete";
                       }
-                      this.actionStatus = "complete";
-                    }
+                    });
                 }
                 this.kill = function() {
                     buildings.splice(this.bN,1);
@@ -239,7 +242,7 @@
                 }
                 this.close = function() {
                     for (var i=0;i<this.buildings.length;i++) {
-                        remove(this.buildings[i]);
+                        this.buildings[i].kill();
                     }
                     remove(this);
                     bMActive = false;
@@ -536,6 +539,19 @@
                 }
             }
 
+            /* Simple timer */
+            function Timer(time,callBack) {
+              this.time = time;
+              this.draw = function() {
+                this.time--;
+                if (this.time <= 0) {
+                  if (callBack)
+                    callBack();
+
+                  remove(this);
+                }
+              }
+            }
 
 
             function pushGroup(x,y,enemy) {
@@ -578,6 +594,7 @@
                 whichEnemy = 0;
                 movingGroup = null;
                 attackGroup = null;
+                targetedSprite = null;
                 message = false;
                 buildings = [];
                 bMActive = false;
@@ -664,6 +681,17 @@
                 return group;
             }
 
+            /* Visual flare to indicate that sprite is active */
+            function targetSprite(obj, time, callBack) {
+              if (obj.x && obj.y)
+                targetedSprite = obj;
+
+              add(new Timer(time,() => {
+                targetedSprite = null;
+                callBack();
+              }));
+            }
+
             function sortObjects() {
                 /* Sort buildings */
                 if (buildings)
@@ -728,6 +756,12 @@
                         }
                         ctx.stroke();
                         movingGroup.rangeAngle += Math.PI / 100;
+                    }
+
+                    /*Targeted sprite*/
+                    if (targetedSprite != null) {
+                      /* Draw target around sprite */
+                      ctx.drawImage(graphics,16*6,16,16,16,targetedSprite.x - 8,targetedSprite.y - 8,16,16);
                     }
 
                     /* HUD */
@@ -1314,4 +1348,4 @@ opengameart.org
 Videlais for the tile sheet
 darkagent for players and enemies
 !-->
-<img id="g" src="data:image/png;base64,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" alt="" />
+<img id="g" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAAAgCAYAAADKbvy8AAAGCUlEQVRoge1aMWsjRxT+JiSdiwORa3L+A8YGgwyHKjXGwXHikwpDQDbEQZDCW+S6+Bdcec2mOBDYIAsChliJ4xgbNapcCQIR+QOKr3AiSKEmXDEppLeenX0zO7PaPafwB2ZXMzszb+eb9943swYe8YhHPByElDJeIMQDmXKP8nJNAkgYUmpU5fXhy8wG6u9KEEJASgkhBMrLNTkYdtkxbHUPhQ9NFatLW/K3Py4EXV06Ky/X6JabKQEAg2HX1bZEH+NO37WtF3TyOKJsdSbMFiIAoCjiWQJXl7bk0711bGBdAsBqG84kEs5uwui+XgkyG7h/OcHR5kJ0dcHGq9cJ8m2eS1FHmWShTj6Vac+wUBdxqVFFK9hBMzxFuYMoqqQtYmZs47gJAleXttg44+GJEgCa4SlX7roIBCxenIbt3YtE2fWh48hTSAAoNaoAIs/3sV8CQCvYwY9/76IVnKDu2Ed5uSbVxU+oV8B6vjGE3rV7jrbyyCvckde5eh8AbD85TpQFeOY1bqlRjd5Bvfdpb+rPBBN5wDSicSQaCXy6t467di+6OiK2clV4rmJebTiuYC5km4RRXqA8CsX2ZniKVnCiR6NUOzj7TcR+oBdQmCTS6OqbAwE+lKWhvFyTtABKjWr0R7+5/KBBANPcqV7hQd5g2BWqt4w7fV8RIsadPsadPuqVAHTvagPnvSYkCASSZGUhDwB+PtnK0iwXZAm9BMZbOVETQVexM5EigNjki8GwC1KytvFbwU5s8baCHeOziRA6U1FSZb3c+UiSAS7II//pOcO2Cm3ts+QvIFKKEYmKunSFBGJzkRo6B8OuqFcgz27CBGn1SsBGAS4HRqtje/dC9aJCcwhwHz65CVcFRbnDKzJgOvEbr17HyCs1qrg+fOlsh77f893A03u0gh3UKwHObsJoK5HWD5HIlXPPG0UMkCkEmuS/Ws+ivFyT03x1gaPOgt6XAKDXG0Fk61cfqBP2vk5fKLTunf+DX394EZV/9uVPwBfTOmcVmkMYVAey5o+1lbo8uwmx/fwbNK/+Jc9R28ipjA6wfzlJ9cL/C5rhKUqNKrcnTkDdQkzf814AHm0+wX1d/L1ZETODUP4eCvOML7RrYWBOcgBMxchdu5fIZ64Lz0WAcR441ymIL2YvL7afv4vGvGv3dOUbywsZZP17xWDYFavtd7I5+90MT7l3SrShd1S2PqDftDfU31tw54Y+uPru21iHayt1nN2ELn0KdcPq2mZx4RNj5WhyK9VwRQJGBVeml+sCSH1mFsoiO9ZW6pwppndJEOhxuJ9AOFqXVhEzD5rhqTGPziYhcWxkO/Q2nUToUNVqFphsdtQEaYtQFWVzIRxNPzQURqC+itUrkWuqn2cPR21sCtSFJK59yqKIyCPBlfJsLimgMALVyZ/3msWb9NBn6scWLrk+DIiR5whvEsnrgsVe1C53AimX2SbEdG+qG3f6gOU4SYU+0eNOH88+X8Gfv/xubceRyPZtsUMlz0Rklm+jRBwQJw9QRAyduminL6nQRYwqJPL6pKSdBxqFTBFjqzYASNixtlKXgJfnxUhMU9Oc16nl0T4wC3km6CFL/6Jgu+d+06m+DaPJbUxAcP34jquWEV5UvmbHPzi+Sp8YT5jIU8tiITSvrwe6+PC953675EGa3I8bm9bnsubWvzqXxrq3b85xAOD7rz4FkCSUyl1hI48QLPZEISKGm6C0HJgmJlzyIBFnWxicna5laQtDJfHtm/N4pQeBLuQRCiFQl/KENO8zSf80cWGywdaHzcO5xeSaU4nErPAhD3AkMIvA8ZHmLoo0T5i8LK+xVO/zETcEV/IA+2F2BFfySEj4KEDXzbr6YXQ0uTU+k6f65HI50/88G3JWWXp1kOdZKMn4vCU8kJDxia1EkWPrdqg2zM5CjXOoe+DB8ZXqobH/cghH69LH+4CCT2IIvqHS8xTEOHaWXGayMaWt8UO2rkZV8vRnfckDCiDQ9JK+YsDYr8eJTBH50wKWxIQavX82Ahc6XcksJIQCxZyEcJ9z1LFzHTAdagjV4fw5af9yYrTbhcT/AMeITxGoTTqZAAAAAElFTkSuQmCC" alt="" />
