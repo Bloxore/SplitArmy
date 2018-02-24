@@ -264,7 +264,7 @@
                 this.goto = null;
                 this.list = null;
                 this.rangeAngle = 0;
-                this.actions = 3;
+                this.actions = 2;
                 this.drawMembers = function() {
 
                 }
@@ -401,7 +401,8 @@
                     newGroup.goto = [this.x - 26, this.y];
                     this.goto = [this.x + 26,this.y]
                     shuffleGroup(this,12);
-                    this.actions -= 1;
+                    /* This code used to make splitting count as one action, now it does not*/
+                    /*this.actions -= 1;*/
                     newGroup.actions = this.actions;
                 }
             }
@@ -616,7 +617,8 @@
                     shuffleGroup(createTroops(20,0,0,pushGroup(110,110)),12);
                     /* Create Enemies */
                     shuffleGroup(createTroops(10,0,0,pushGroup(20,110,true)),12);
-                    shuffleGroup(createTroops(10,0,0,pushGroup(200,200,true)),12);
+                    shuffleGroup(createTroops(7,0,0,pushGroup(20,50,true)),12);
+                    shuffleGroup(createTroops(7,0,0,pushGroup(150,150,true)),12);
                 } else if (level == 2) {
                     shuffleGroup(createTroops(10,0,0,pushGroup(50,50)),12);
                     shuffleGroup(createTroops(10,0,0,pushGroup(200,200)),12);
@@ -648,7 +650,7 @@
                     /* Reset all groups */
                     for (var i=0;i<groups.length;i++) {
                         if (groups[i])
-                        groups[i].actions = 3;
+                        groups[i].actions = 2;
                     }
                 } else {
                     whichEnemy = 0;
@@ -656,7 +658,7 @@
                     add(new Message("ENEMY TURN",120,90,enemyTurn));
                     for (var i=0;i<enemyGroups.length;i++) {
                         if (enemyGroups[i])
-                            enemyGroups[i].actions = 3;
+                            enemyGroups[i].actions = 2;
                     }
                 }
             }
@@ -948,7 +950,8 @@
                         if (distances[i-1] && distances[i] < distances[i-1])
                             target = i;
                     }
-                    if (Math.floor(distances[target]) > 42) {
+                    /* Make sure target is worth going for and that the enemy can even still move*/
+                    if (Math.floor(distances[target]) > 42 && e.actions > 0) {
                         if (distances[target] > e.range[2] && distances[target] - e.range[2] > 42) {
                             var ratio = e.range[2] / distances[target];
                             e.goto = [];
@@ -1346,5 +1349,8 @@
 opengameart.org
 Videlais for the tile sheet
 darkagent for players and enemies
+
+lospec.com
+Kirokaze for Pallet
 !-->
 <img id="g" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHAAAAAgCAYAAADKbvy8AAAGCUlEQVRoge1aMWsjRxT+JiSdiwORa3L+A8YGgwyHKjXGwXHikwpDQDbEQZDCW+S6+Bdcec2mOBDYIAsChliJ4xgbNapcCQIR+QOKr3AiSKEmXDEppLeenX0zO7PaPafwB2ZXMzszb+eb9943swYe8YhHPByElDJeIMQDmXKP8nJNAkgYUmpU5fXhy8wG6u9KEEJASgkhBMrLNTkYdtkxbHUPhQ9NFatLW/K3Py4EXV06Ky/X6JabKQEAg2HX1bZEH+NO37WtF3TyOKJsdSbMFiIAoCjiWQJXl7bk0711bGBdAsBqG84kEs5uwui+XgkyG7h/OcHR5kJ0dcHGq9cJ8m2eS1FHmWShTj6Vac+wUBdxqVFFK9hBMzxFuYMoqqQtYmZs47gJAleXttg44+GJEgCa4SlX7roIBCxenIbt3YtE2fWh48hTSAAoNaoAIs/3sV8CQCvYwY9/76IVnKDu2Ed5uSbVxU+oV8B6vjGE3rV7jrbyyCvckde5eh8AbD85TpQFeOY1bqlRjd5Bvfdpb+rPBBN5wDSicSQaCXy6t467di+6OiK2clV4rmJebTiuYC5km4RRXqA8CsX2ZniKVnCiR6NUOzj7TcR+oBdQmCTS6OqbAwE+lKWhvFyTtABKjWr0R7+5/KBBANPcqV7hQd5g2BWqt4w7fV8RIsadPsadPuqVAHTvagPnvSYkCASSZGUhDwB+PtnK0iwXZAm9BMZbOVETQVexM5EigNjki8GwC1KytvFbwU5s8baCHeOziRA6U1FSZb3c+UiSAS7II//pOcO2Cm3ts+QvIFKKEYmKunSFBGJzkRo6B8OuqFcgz27CBGn1SsBGAS4HRqtje/dC9aJCcwhwHz65CVcFRbnDKzJgOvEbr17HyCs1qrg+fOlsh77f893A03u0gh3UKwHObsJoK5HWD5HIlXPPG0UMkCkEmuS/Ws+ivFyT03x1gaPOgt6XAKDXG0Fk61cfqBP2vk5fKLTunf+DX394EZV/9uVPwBfTOmcVmkMYVAey5o+1lbo8uwmx/fwbNK/+Jc9R28ipjA6wfzlJ9cL/C5rhKUqNKrcnTkDdQkzf814AHm0+wX1d/L1ZETODUP4eCvOML7RrYWBOcgBMxchdu5fIZ64Lz0WAcR441ymIL2YvL7afv4vGvGv3dOUbywsZZP17xWDYFavtd7I5+90MT7l3SrShd1S2PqDftDfU31tw54Y+uPru21iHayt1nN2ELn0KdcPq2mZx4RNj5WhyK9VwRQJGBVeml+sCSH1mFsoiO9ZW6pwppndJEOhxuJ9AOFqXVhEzD5rhqTGPziYhcWxkO/Q2nUToUNVqFphsdtQEaYtQFWVzIRxNPzQURqC+itUrkWuqn2cPR21sCtSFJK59yqKIyCPBlfJsLimgMALVyZ/3msWb9NBn6scWLrk+DIiR5whvEsnrgsVe1C53AimX2SbEdG+qG3f6gOU4SYU+0eNOH88+X8Gfv/xubceRyPZtsUMlz0Rklm+jRBwQJw9QRAyduminL6nQRYwqJPL6pKSdBxqFTBFjqzYASNixtlKXgJfnxUhMU9Oc16nl0T4wC3km6CFL/6Jgu+d+06m+DaPJbUxAcP34jquWEV5UvmbHPzi+Sp8YT5jIU8tiITSvrwe6+PC953675EGa3I8bm9bnsubWvzqXxrq3b85xAOD7rz4FkCSUyl1hI48QLPZEISKGm6C0HJgmJlzyIBFnWxicna5laQtDJfHtm/N4pQeBLuQRCiFQl/KENO8zSf80cWGywdaHzcO5xeSaU4nErPAhD3AkMIvA8ZHmLoo0T5i8LK+xVO/zETcEV/IA+2F2BFfySEj4KEDXzbr6YXQ0uTU+k6f65HI50/88G3JWWXp1kOdZKMn4vCU8kJDxia1EkWPrdqg2zM5CjXOoe+DB8ZXqobH/cghH69LH+4CCT2IIvqHS8xTEOHaWXGayMaWt8UO2rkZV8vRnfckDCiDQ9JK+YsDYr8eJTBH50wKWxIQavX82Ahc6XcksJIQCxZyEcJ9z1LFzHTAdagjV4fw5af9yYrTbhcT/AMeITxGoTTqZAAAAAElFTkSuQmCC" alt="" />
