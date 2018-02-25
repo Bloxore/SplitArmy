@@ -46,516 +46,586 @@
     </body>
     <!--Javascript code starts here !-->
     <script>
-        var COLORS = ["#332c50","#46878f","#94e344","#e2f3e4"];
-        var fullscreen = false;
-        window.onload = function() {
+    	/* Engine Constants */
+    	/* Pallet */
+        const COLORS = ["#332c50","#46878f","#94e344","#e2f3e4"];
+        /* FX */
+        const CIRCLE_TRANSITION = 0x0001;
+        const FADE = 0x0010;
+        const FLASH = 0x0100;
+        /* States */
+        const GAME_STATE = 1;
+        const MENU_STATE = 2;
+        /* Game Size */
+        const WIDTH = 480;
+        const HEIGHT = 480;
+
+        let fullscreen = false;
+        window.onload = () => {
             /* Game div */
-            var gmdiv = document.getElementById("game");
+            let _gameDiv = document.getElementById("game");
             /* Background layer */
-            var bgc = gmdiv.appendChild(document.createElement("CANVAS"));
-            bgc.width = 480;
-            bgc.height = 480;
-            var bgctx = bgc.getContext("2d");
+            let _bgCanvas = _gameDiv.appendChild(document.createElement("CANVAS"));
+            _bgCanvas.width = WIDTH;
+            _bgCanvas.height = HEIGHT;
+            let _bgCtx = _bgCanvas.getContext("2d");
             /*Pixel Perfect*/
-            bgctx.imageSmoothingEnabled = false;
+            _bgCtx.imageSmoothingEnabled = false;
             /*Scale up game*/
-            bgctx.scale(2,2);
+            _bgCtx.scale(2,2);
             /* Foreground layer */
-            var c = gmdiv.appendChild(document.createElement("CANVAS"));
-            c.width = 480;
-            c.height = 480;
-            var ctx = c.getContext("2d");
+            let _canvas = _gameDiv.appendChild(document.createElement("CANVAS"));
+            _canvas.width = WIDTH;
+            _canvas.height = HEIGHT;
+            let _ctx = _canvas.getContext("2d");
             /*Pixel Perfect*/
-            ctx.imageSmoothingEnabled = false;
+            _ctx.imageSmoothingEnabled = false;
             /*Scale up game*/
-            ctx.scale(2,2);
+            _ctx.scale(2,2);
 
             /* Assign graphics their own variable */
-            var graphics = document.getElementById("g");
+            let graphics = document.getElementById("g");
 
-            var objects = [];
-            var objId = 0;
-            var mouse = {x:0,y:0,down:false,click:false};
-            var deltaTime = Date.now();
-            var frames = 0;
-            var fps = 60;
-            var debug = true;
-            var fx = {};
-            var CIRCLE_TRANSITION = 0x0001;
-            var FADE = 0x0010;
-            var FLASH = 0x0100;
+            let objects = [];
+            let objId = 0;
+            let mouse = {x:0,y:0,down:false,click:false};
+            let deltaTime = Date.now();
+            let frames = 0;
+            let fps = 60;
+            let debug = true;
+            let fx = {};
+            let sineOffset = 0;
 
             /* Game variables */
-            var GAME_STATE = 1;
-            var MENU_STATE = 2;
-            var groups;
-            var enemyGroups;
-            var whichEnemy;
-            var movingGroup;
-            var message;
-            var buildings;
-            var bMActive;
-            var turn;
-            var attackGroup;
-            var targetedSprite;
-            var state;
-            var level;
+            let groups;
+            let enemyGroups;
+            let whichEnemy;
+            let movingGroup;
+            let message;
+            let buildings;
+            let bMActive;
+            let turn;
+            let attackGroup;
+            let targetedSprite;
+            let gameState;
+            let level;
 
-            function Troop(x,y,frame) {
-                this.x = x;
-                this.y = y;
-                this.zIndex = 1;
-                this.frame = frame;
-                this.group = 1;
-                this.goto = null;
-                this.draw = function() {
-                    ctx.drawImage(graphics,frame*16,0,Math.floor(16),Math.floor(16),this.x,this.y,16,16);
+            /* Objects */
+            const GameObject = (x,y) => {
+                let state = {
+                  x,
+                  y,
+                  zIndex: 0,
+                  ID: 0,
+                  draw: () => {},
+                  update: () => {},
                 }
-                this.update = function() {
-                    if (this.goto != null) {
-                        this.x += Math.floor(this.goto[0] - this.x)/3;
-                        this.y += Math.floor(this.goto[1] - this.y)/3;
-                        if (this.x == this.goto[0] && this.y == this.goto[1])
-                            this.goto = null;
-                    }
-                }
-            }
+                return state;
+            };
+
+            const Troop = (x,y,frame) => {
+                /* Have troop extend GameObject */
+                let state = Object.assign(
+                  GameObject(x,y),
+                  {
+                    zIndex: 1,
+                    frame,
+                    group: 1,
+                    goto: null,
+                    draw: () => {
+                      _ctx.drawImage(graphics,state.frame*16,0,16,16,state.x,state.y,16,16);
+                    },
+                    update: () => {
+                      if (state.goto != null) {
+                          state.x += Math.floor(state.goto[0] - state.x)/3;
+                          state.y += Math.floor(state.goto[1] - state.y)/3;
+                          if (state.x == state.goto[0] && state.y == state.goto[1])
+                              state.goto = null;
+                      }
+                    },
+                  },
+                );
+
+                return state;
+            };
             /* Building ideas:
             Attack tower
             Make more guys building
             Wall to stall for time
             */
-            function Building(x,y,type) {
-                this.x = x;
-                this.y = y;
-                this.mpBuild = 10;
-                this.actionStatus = "start";
-                this.zIndex = 1;
-                this.type = type;
-                this.bN = buildings.length;
-                buildings.push(this);
-                this.draw = function() {
-                    if (this.type = "t") {
-                        ctx.drawImage(graphics,16,16,32,16,this.x,this.y,32,16);
-                        ctx.drawImage(graphics,48,16,32,16,this.x,this.y+16,32,16);
-                        mpBuild = 10;
-                    }
-                }
-                this.action = function() {
-                    /* Cancel request if action is already in progress */
-                    if (this.actionStatus == "progress" || this.actionStatus == "complete")
-                        return;
-                    this.actionStatus = "progress";
-                    targetSprite(this,1000,() => {
-                      if (this.type == "t") {
-                        var range = 30;
-                        for (var i=0; i < enemyGroups.length; i++) {
-                            if (Math.sqrt(Math.pow(enemyGroups[i].x - this.x,2)+Math.pow(enemyGroups[i].y - this.y,2)) < range) {
-                                enemyGroups[i].members.splice(0,Math.ceil(enemyGroups[i].members.length/10));
-                            }
-                        }
-                        this.actionStatus = "complete";
+            const Building = (x,y,type) => {
+                /* Combine objects */
+                let state = Object.assign(
+                  GameObject(x,y),
+                  {
+                    mpBuild: 10,
+                    actionStatus: "start",
+                    zIndex: 1,
+                    type,
+                    bN: buildings.length,
+                    draw: () => {
+                      if (state.type = "t") {
+                          _ctx.drawImage(graphics,16,16,32,16,state.x,state.y,32,16);
+                          _ctx.drawImage(graphics,48,16,32,16,state.x,state.y+16,32,16);
+                          state.mpBuild = 10;
                       }
-                    });
-                }
-                this.kill = function() {
-                    buildings.splice(this.bN,1);
-                    remove(this);
-                }
-            }
+                    },
+                    action: () => {
+                      /* Cancel request if action is already in progress */
+                      if (state.actionStatus == "progress" || state.actionStatus == "complete")
+                          return;
 
-            function BuildingMenu(group) {
-                this.zIndex = 100;
-                var items = ["t","t","t","t","t","t"];
-                var descriptions = [
-                    "Attack Tower\n[10 MP]\nProvide assualt\nwithout risk at\nthe cost of MP."
-                ]
-                this.buildings = []
-                for (var i=0;i<items.length;i++) {
-                    this.buildings.push(add(new Building(20+55*(i%4),90*(Math.floor(i/4)+1) - 50,items[i])));
-                }
-                this.hover = null;
-                this.draw = function() {
-                    this.update();
-                    ctx.textAlign = "center";
-                    ctx.strokeStyle = COLORS[0];
-                    ctx.lineWidth = 10;
-                    ctx.fillStyle = COLORS[3];
-                    ctx.beginPath();
-                    ctx.rect(0,0,240,240);
-                    ctx.fill();
-                    ctx.stroke();
-                    ctx.lineWidth = 2;
-                    ctx.fillStyle = COLORS[1];
-                    ctx.font = "bold 18px Arial"
-                    ctx.fillText("Building Menu",120,24);
-                    ctx.font = "bold 6px Arial"
-                    for (var i=0;i<items.length;i++) {
-                        this.buildings[i].draw();
-                        if (descriptions[i]) {
-                            ctx.fillStyle = COLORS[1];
-                            var text = descriptions[i].split("\n");
-                            for (var t=0;t<text.length;t++) {
-                               if (t==0)
-                                   ctx.font = "bold 7px Arial";
-                                else
-                                   ctx.font = "bold 6px Arial";
-                                ctx.fillText(text[t],this.buildings[i].x+16,this.buildings[i].y + 40 + 10*t);
-                            }
+                      state.actionStatus = "progress";
+                      targetSprite(state,1000,() => {
+                        if (state.type == "t") {
+                          let range = 30;
+                          for (let i=0; i < enemyGroups.length; i++) {
+                              if (Math.sqrt(Math.pow(enemyGroups[i].x - state.x,2)+Math.pow(enemyGroups[i].y - state.y,2)) < range) {
+                                  enemyGroups[i].members.splice(0,Math.ceil(enemyGroups[i].members.length/10));
+                              }
+                          }
+                          state.actionStatus = "complete";
                         }
-                    }
-                    /* Back Button */
-                    ctx.drawImage(graphics,80,16,16,16,14,10,16,16);
-                    /* Flavor text */
-                    ctx.fillText("Group's MP: " + group.members.length,120,230);
-                    ctx.textAlign = "left";
-                    if (this.hover != null) {
-                        ctx.beginPath();
-                        ctx.rect(this.hover.x-11,this.hover.y-5,56,90);
-                        ctx.stroke();
-                    }
+                      });
+                    },
+                    kill: () => {
+                      buildings.splice(state.bN,1);
+                      remove(state);
+                    },
+                  }
+                );
+                /* Add the building to the array of buildings when created*/
+                buildings.push(state);
+                return state;
+            };
+
+            const BuildingMenu = (group) => {
+              /* Menu's variables */
+                let items = ["t","t","t","t","t","t"];
+                let descriptions = [
+                  "Attack Tower\n[10 MP]\nProvide assualt\nwithout risk at\nthe cost of MP."
+                ];
+
+                let state = Object.assign(
+                  GameObject(0,0),
+                  {
+                    zIndex: 100,
+                    buildings: [],
+                    hover: null,
+                    draw: () => {
+                      state.update();
+                      _ctx.textAlign = "center";
+                      _ctx.strokeStyle = COLORS[0];
+                      _ctx.lineWidth = 10;
+                      _ctx.fillStyle = COLORS[3];
+                      _ctx.beginPath();
+                      _ctx.rect(0,0,240,240);
+                      _ctx.fill();
+                      _ctx.stroke();
+                      _ctx.lineWidth = 2;
+                      _ctx.fillStyle = COLORS[1];
+                      _ctx.font = "bold 18px Arial"
+                      _ctx.fillText("Building Menu",120,24);
+                      _ctx.font = "bold 6px Arial"
+                      for (let i=0;i<items.length;i++) {
+                          state.buildings[i].draw();
+                          if (descriptions[i]) {
+                              _ctx.fillStyle = COLORS[1];
+                              let text = descriptions[i].split("\n");
+                              for (let t=0;t<text.length;t++) {
+                                 if (t==0)
+                                     _ctx.font = "bold 7px Arial";
+                                  else
+                                     _ctx.font = "bold 6px Arial";
+                                  _ctx.fillText(text[t],state.buildings[i].x+16,state.buildings[i].y + 40 + 10*t);
+                              }
+                          }
+                      }
+                      /* Back Button */
+                      _ctx.drawImage(graphics,80,16,16,16,14,10,16,16);
+                      /* Flavor text */
+                      _ctx.fillText("Group's MP: " + group.members.length,120,230);
+                      _ctx.textAlign = "left";
+                      if (state.hover != null) {
+                          _ctx.beginPath();
+                          _ctx.rect(state.hover.x-11,state.hover.y-5,56,90);
+                          _ctx.stroke();
+                      }
+                    },
+                    update: () => {
+                      bMActive = true;
+                      /* Check mouse position around each time and draw
+                      a rectangle around it if selected */
+                      state.hover = null;
+                      if (state.buildings)
+                      for (var i=0;i<state.buildings.length;i++) {
+                          if (mouse.x > state.buildings[i].x-10 && mouse.x < state.buildings[i].x + 42 && mouse.y > state.buildings[i].y-5 && mouse.y < state.buildings[i].y + 85) {
+                              state.hover = {x:state.buildings[i].x,y:state.buildings[i].y};
+                              /* If clicked place build */
+                              if (mouse.click && group.members.length >= state.buildings[i].mpBuild) {
+                                  mouse.click = false;
+                                  group.actions -= 1;
+                                  /* Not to be confused with state.buildings (this is the global array) */
+                                  buildings.push(add(Building(group.x - 8,group.y,state.buildings[i].type)));
+                                  group.goto = [group.x,group.y + 46];
+                                  state.close();
+                              }
+                          }
+                      }
+                      /* Close menu if click on back button */
+                      if (mouse.x > 14 && mouse.x < 30 && mouse.y > 10 && mouse.y < 26 && mouse.click) {
+                          state.close();
+                      }
+                    },
+                    close: () => {
+                      for (let i=0;i<state.buildings.length;i++) {
+                          state.buildings[i].kill();
+                      }
+                      remove(state);
+                      bMActive = false;
+                    },
+                  }
+                );
+
+                /* Add building sprites to buildings array */
+                for (let i=0;i<items.length;i++) {
+                    state.buildings.push(add(Building(20+55*(i%4),90*(Math.floor(i/4)+1) - 50,items[i])));
                 }
-                this.update = function() {
-                    bMActive = true;
-                    /* Check mouse position around each time and draw
-                    a rectangle around it if selected */
-                    this.hover = null;
-                    if (this.buildings)
-                    for (var i=0;i<this.buildings.length;i++) {
-                        if (mouse.x > this.buildings[i].x-10 && mouse.x < this.buildings[i].x + 42 && mouse.y > this.buildings[i].y-5 && mouse.y < this.buildings[i].y + 85) {
-                            this.hover = {x:this.buildings[i].x,y:this.buildings[i].y};
-                            /* If clicked place build */
-                            if (mouse.click && group.members.length >= this.buildings[i].mpBuild) {
-                                mouse.click = false;
-                                group.actions -= 1;
-                                /* Not to be confused with this.buildings (this is the global array) */
-                                buildings.push(add(new Building(group.x - 8,group.y,this.buildings[i].type)));
-                                group.goto = [group.x,group.y + 46];
-                                this.close();
-                            }
-                        }
-                    }
-                    /* Close menu if click on back button */
-                    if (mouse.x > 14 && mouse.x < 30 && mouse.y > 10 && mouse.y < 26 && mouse.click) {
-                        this.close();
-                    }
-                }
-                this.close = function() {
-                    for (var i=0;i<this.buildings.length;i++) {
-                        this.buildings[i].kill();
-                    }
-                    remove(this);
-                    bMActive = false;
-                }
-            }
-            function Group(x,y,enemy) {
-                this.zIndex = 3;
-                this.x = x;
-                this.y = y;
-                this.range = [x,y,16];
+
+                return state;
+            };
+
+            const Group = (x,y,enemy) => {
+                let state = Object.assign(
+                  GameObject(x,y),
+                  {
+                    zIndex: 3,
+                    range: [x,y,16],
+                    enemy: false,
+                    members: [],
+                    group: "A",
+                    goto: null,
+                    list: null,
+                    rangeAngle: 0,
+                    actions: 2,
+                    draw: () => {
+                      state.update();
+                      for (let i=0;i<state.members.length;i++){
+                          state.members[i].update();
+                          state.members[i].x += state.x;
+                          state.members[i].y += state.y;
+                          state.members[i].draw();
+                          state.members[i].x -= state.x;
+                          state.members[i].y -= state.y;
+                      }
+                      _ctx.lineWidth = 2;
+                      if (enemy == true) {
+                          _ctx.beginPath();
+                          _ctx.strokeStyle = COLORS[0];
+                          _ctx.rect(state.x-12,state.y-12,40,40);
+                          _ctx.stroke();
+                          /*Group info*/
+                          _ctx.beginPath();
+                          _ctx.fillStyle = COLORS[0];
+                          _ctx.rect(state.x + 16,state.y + 19,12,10);
+                          _ctx.fill();
+                          /*Info text*/
+                          _ctx.fillStyle = COLORS[3];
+                          _ctx.font = "bold 8px Arial"
+                          _ctx.fillText(state.members.length,state.x + 17,state.y + 26.5);
+                      } else {
+                          /*Circle around group*/
+                          _ctx.beginPath();
+                          _ctx.strokeStyle = COLORS[0];
+                          _ctx.arc(state.x+8,state.y+8,24,0,Math.PI*2);
+                          _ctx.stroke();
+                          /*Group info*/
+                          _ctx.beginPath();
+                          _ctx.fillStyle = COLORS[0];
+                          _ctx.rect(state.x + 6,state.y + 22,30,10);
+                          _ctx.fill();
+                          /* Action counter */
+                          _ctx.beginPath();
+                          _ctx.arc(state.x - 10,state.y - 10,5,0,Math.PI*2);
+                          _ctx.fill();
+                          /*Info text*/
+                          _ctx.fillStyle = COLORS[3];
+                          _ctx.font = "bold 8px Arial"
+                          _ctx.fillText(state.group + ": " + state.members.length,state.x + 6.5,state.y + 30);
+                          _ctx.fillText(state.actions,state.x-12.75,state.y-7);
+                      }
+                    },
+                    update: () => {
+                      if (movingGroup == null) {
+                              state.range = [state.x,state.y,32+ Math.log(state.members.length)*16]
+                      }
+                      if (mouse.click == true && mouse.x > state.x - 20 && mouse.x < state.x + 32 && mouse.y > state.y - 20 && mouse.y < state.y + 32) {
+                          if (enemy != true) {
+                              /* Create action command list */
+                              if (state.list == null && movingGroup == null && state.actions > 0 && message == false && bMActive == false && attackGroup == null && !fx.type) {
+                                  /* Delete all other group's lists, but be sure the group exists first.*/
+                                  for (let i=0;i<groups.length;i++) {
+                                      if (groups[i].list != null && groups[i].list.active == -1) {
+                                          remove(groups[i].list);
+                                          groups[i].list = null;
+                                      }
+                                      if (groups[i].list != null && groups[i].list.active != -1)
+                                          return;
+                                  }
+                                  /* Disable click */
+                                  mouse.click = false;
+                                  state.list = add(List(mouse.x - 5,mouse.y - 5,state));
+                              }
+                          } else {
+                              /* For enemy groups only */
+                              if (attackGroup != null) {
+                                  /* Initiate attack */
+                                  let distance = Math.sqrt(Math.pow((state.x - attackGroup.x),2)+Math.pow((state.y - attackGroup.y),2));
+                                  if (distance < 48) {
+                                      enemyLength = state.members.length;
+                                      state.members.splice(0,attackGroup.members.length);
+                                      attackGroup.actions -= 1;
+                                      /* Attacking group also takes loses */
+                                      attackGroup.members.splice(0,enemyLength/2);
+                                      shuffleGroup(attackGroup,12);
+                                      shuffleGroup(state,12);
+                                      attackGroup = null;
+                                  }
+                              }
+                          }
+                      }
+                      /* Delete dead groups */
+                      if (state.members.length < 1){
+                          remove(state);
+                          if (state.enemy == true) {
+                              for (let i=0;i<enemyGroups.length;i++) {
+                                  if (enemyGroups[i].ID == state.ID)
+                                      enemyGroups.splice(i,1);
+                              }
+                          } else {
+                              for (let i=0;i<groups.length;i++) {
+                                  if (groups[i].ID == state.ID)
+                                      groups.splice(i,1);
+                              }
+                          }
+                      }
+                      if (state.goto != null) {
+                          state.x += (state.goto[0] - state.x)/3;
+                          state.y += (state.goto[1] - state.y)/3;
+                          if (Math.round(state.x) == Math.round(state.goto[0]) && Math.round(state.y) == Math.round(state.goto[1]))
+                              state.goto = null;
+                      }
+                      if (state.enemy == false) {
+                          if (state.x > 240)
+                              state.goto = [220,state.y];
+                          else if (state.x < 0)
+                              state.goto = [20,state.y];
+                          if (state.y > 240)
+                              state.goto = [state.x,220];
+                          else if (state.y < 0)
+                              state.goto = [state.x,20];
+                      }
+                    },
+                    split: () => {
+                      let newGroup;
+                      if (state.members.length < 2)
+                          return;
+                      /*Split the group, reposition and shuffle it*/
+                      if (enemy == true) {
+                          newGroup = shuffleGroup(pushGroup(state.x, state.y,true),12);
+                      } else {
+                          if (groups.length >= 4)
+                              return;
+                         newGroup = shuffleGroup(pushGroup(state.x, state.y),12);
+                      }
+                      newGroup.members = state.members.splice(state.members.length/2,state.members.length/2);
+                      newGroup.goto = [state.x - 26, state.y];
+                      state.goto = [state.x + 26,state.y]
+                      shuffleGroup(state,12);
+                      /* This code used to make splitting count as one action, now it does not*/
+                      /*state.actions -= 1;*/
+                      newGroup.actions = state.actions;
+                    },
+                });
+
+                /* Enemy status */
                 if (enemy) {
-                    this.enemy = enemy;
-                    this.zIndex = 2;
-                } else {
-                    this.enemy = false;
+                    state.enemy = enemy;
+                    state.zIndex = 2;
                 }
-                this.members = [];
-                this.group = "A";
-                this.goto = null;
-                this.list = null;
-                this.rangeAngle = 0;
-                this.actions = 2;
-                this.drawMembers = function() {
 
-                }
-                this.draw = function() {
-                    this.update();
-                    for (var i=0;i<this.members.length;i++){
-                        this.members[i].update();
-                        this.members[i].x += this.x;
-                        this.members[i].y += this.y;
-                        this.members[i].draw();
-                        this.members[i].x -= this.x;
-                        this.members[i].y -= this.y;
-                    }
-                    ctx.lineWidth = 2;
-                    if (enemy == true) {
-                        ctx.beginPath();
-                        ctx.strokeStyle = COLORS[0];
-                        ctx.rect(this.x-12,this.y-12,40,40);
-                        ctx.stroke();
-                        /*Group info*/
-                        ctx.beginPath();
-                        ctx.fillStyle = COLORS[0];
-                        ctx.rect(this.x + 16,this.y + 19,12,10);
-                        ctx.fill();
-                        /*Info text*/
-                        ctx.fillStyle = COLORS[3];
-                        ctx.font = "bold 8px Arial"
-                        ctx.fillText(this.members.length,this.x + 17,this.y + 26.5);
-                    } else {
-                        /*Circle around group*/
-                        ctx.beginPath();
-                        ctx.strokeStyle = COLORS[0];
-                        ctx.arc(this.x+8,this.y+8,24,0,Math.PI*2);
-                        ctx.stroke();
-                        /*Group info*/
-                        ctx.beginPath();
-                        ctx.fillStyle = COLORS[0];
-                        ctx.rect(this.x + 6,this.y + 22,30,10);
-                        ctx.fill();
-                        /* Action counter */
-                        ctx.beginPath();
-                        ctx.arc(this.x - 10,this.y - 10,5,0,Math.PI*2);
-                        ctx.fill();
-                        /*Info text*/
-                        ctx.fillStyle = COLORS[3];
-                        ctx.font = "bold 8px Arial"
-                        ctx.fillText(this.group + ": " + this.members.length,this.x + 6.5,this.y + 30);
-                        ctx.fillText(this.actions,this.x-12.75,this.y-7);
-                    }
-                }
-                this.update = function() {
-                    if (movingGroup == null) {
-                            this.range = [this.x,this.y,32+ Math.log(this.members.length)*16]
-                    }
-                    if (mouse.click == true && mouse.x > this.x - 20 && mouse.x < this.x + 32 && mouse.y > this.y - 20 && mouse.y < this.y + 32) {
-                        if (enemy != true) {
-                            /* Create action command list */
-                            if (this.list == null && movingGroup == null && this.actions > 0 && message == false && bMActive == false && attackGroup == null && !fx.type) {
-                                /* Delete all other group's lists, but be sure the group exists first.*/
-                                for (var i=0;i<groups.length;i++) {
-                                    if (groups[i].list != null && groups[i].list.active == -1) {
-                                        remove(groups[i].list);
-                                        groups[i].list = null;
-                                    }
-                                    if (groups[i].list != null && groups[i].list.active != -1)
-                                        return;
-                                }
-                                /* Disable click */
-                                mouse.click = false;
-                                this.list = add(new List(mouse.x - 5,mouse.y - 5,this));
-                            }
-                        } else {
-                            /* For enemy groups only */
-                            if (attackGroup != null) {
-                                /* Initiate attack */
-                                var distance = Math.sqrt(Math.pow((this.x - attackGroup.x),2)+Math.pow((this.y - attackGroup.y),2));
-                                if (distance < 48) {
-                                    enemyLength = this.members.length;
-                                    this.members.splice(0,attackGroup.members.length);
-                                    attackGroup.actions -= 1;
-                                    /* Attacking group also takes loses */
-                                    attackGroup.members.splice(0,enemyLength/2);
-                                    shuffleGroup(attackGroup,12);
-                                    shuffleGroup(this,12);
-                                    attackGroup = null;
-                                }
-                            }
-                        }
-                    }
-                    /* Delete dead groups */
-                    if (this.members.length < 1){
-                        remove(this);
-                        if (this.enemy == true) {
-                            for (var i=0;i<enemyGroups.length;i++) {
-                                if (enemyGroups[i].ID == this.ID)
-                                    enemyGroups.splice(i,1);
-                            }
-                        } else {
-                            for (var i=0;i<groups.length;i++) {
-                                if (groups[i].ID == this.ID)
-                                    groups.splice(i,1);
-                            }
-                        }
-                    }
-                    if (this.goto != null) {
-                        this.x += (this.goto[0] - this.x)/3;
-                        this.y += (this.goto[1] - this.y)/3;
-                        if (Math.round(this.x) == Math.round(this.goto[0]) && Math.round(this.y) == Math.round(this.goto[1]))
-                            this.goto = null;
-                    }
-                    if (this.enemy == false) {
-                        if (this.x > 240)
-                            this.goto = [220,this.y];
-                        else if (this.x < 0)
-                            this.goto = [20,this.y];
-                        if (this.y > 240)
-                            this.goto = [this.x,220];
-                        else if (this.y < 0)
-                            this.goto = [this.x,20];
-                    }
-                }
-                this.split = function() {
-                    if (this.members.length < 2)
-                        return;
-                    /*Split the group, reposition and shuffle it*/
-                    if (enemy == true) {
-                        var newGroup = shuffleGroup(pushGroup(this.x, this.y,true),12);
-                    } else {
-                        if (groups.length >= 4)
-                            return;
-                       var newGroup = shuffleGroup(pushGroup(this.x, this.y),12);
-                    }
-                    newGroup.members = this.members.splice(this.members.length/2,this.members.length/2);
-                    newGroup.goto = [this.x - 26, this.y];
-                    this.goto = [this.x + 26,this.y]
-                    shuffleGroup(this,12);
-                    /* This code used to make splitting count as one action, now it does not*/
-                    /*this.actions -= 1;*/
-                    newGroup.actions = this.actions;
-                }
-            }
+                return state;
+            };
 
-            function List(x,y,group) {
-                this.zIndex = 99;
-                this.x = x;
-                this.y = y;
-                this.items = ["Split","Move","Build","Attack","Rest"];
-                this.active = null;
-                this.group = group;
+            const List = (x,y,group) => {
+                let state = Object.assign(
+                  GameObject(x,y),
+                  {
+                    zIndex: 99,
+                    items: ["Split","Move","Build","Attack","Rest"],
+                    active: null,
+                    group,
+                    inactive: [0,0,0,0,0],
+                    draw: () => {
+                      state.update();
+                      _ctx.beginPath();
+                      _ctx.fillStyle = COLORS[0];
+                      _ctx.rect(state.x,state.y,50,70);
+                      _ctx.fill();
+                      if (state.active != -1 && state.inactive[state.active] == 0) {
+                          _ctx.beginPath();
+                          _ctx.fillStyle = COLORS[1];
+                          _ctx.rect(state.x,state.y + state.active*(70/5),50,70/5);
+                          _ctx.fill();
+                      }
+                      _ctx.fillStyle = COLORS[3];
+                      _ctx.font = "bold 11px Arial"
+                      for (let i=0;i<state.items.length;i++) {
+                          if (state.inactive[i] == 1) {
+                             _ctx.fillStyle = COLORS[1];
+                          }
+                          _ctx.fillText(state.items[i],state.x + 2,state.y + (70/5) * i + 11);
+                          if (state.inactive[i] == 1) {
+                             _ctx.fillStyle = COLORS[3];
+                          }
+                      }
+                    },
+                    update: () => {
+                      if (mouse.x > state.x && mouse.x < state.x + 50 && mouse.y > state.y && mouse.y < state.y + 70) {
+                          state.active = Math.floor((mouse.y - state.y) / (70/5));
+                      } else {
+                          state.active = -1;
+                      }
+                      if (mouse.click) {
+                          mouse.click = false;
+                          if (state.inactive[state.active] == 0) {
+                              if (state.active == 0) {
+                                  state.group.split();
+                              } else if (state.active == 1) {
+                                  movingGroup = group;
+                              } else if (state.active == 2) {
+                                  add(BuildingMenu(state.group));
+                              } else if (state.active == 3) {
+                                  attackGroup = group;
+                              } else if (state.active == 4) {
+                                  state.group.actions = 0;
+                              }
+                          }
+                          /* List is removed whether action occurs or not
+                          Unless it is an inactive item
+                          */
+                          if (state.inactive[state.active] == 0 || state.active == -1) {
+                              remove(state);
+                              state.group.list = null;
+                          }
+                      }
+                    }
+                  }
+                );
+
                 /* If list is off screen, move it */
-                if (this.x + 50 > 240) {
-                    this.x -= 40;
+                if (state.x + 50 > 240) {
+                    state.x -= 40;
                 }
-                if (this.y + 70 > 240) {
-                    this.y -= 60;
+                if (state.y + 70 > 240) {
+                    state.y -= 60;
                 }
-                this.inactive = [0,0,0,0,0];
-                var distances = [];
-                var target = 0;
+
+                let distances = [];
+                let target = 0;
                 /* disable attack if no enemies are nearby */
-                for (var i=0; i < enemyGroups.length; i++) {
+                for (let i=0; i < enemyGroups.length; i++) {
                     distances[i] = Math.sqrt(Math.pow(enemyGroups[i].x - group.x,2)+Math.pow(enemyGroups[i].y - group.y,2));
                     if (distances[i-1] && distances[i] < distances[i-1])
                         target = i;
                 }
                 if (distances[target] > 48) {
-                    this.inactive[3] = 1;
+                    state.inactive[3] = 1;
                 }
                 /* Disable split if there are more than four groups*/
                 if (groups.length >= 4)
-                    this.inactive[0] = 1;
-                this.draw = function () {
-                    this.update();
-                    ctx.beginPath();
-                    ctx.fillStyle = COLORS[0];
-                    ctx.rect(this.x,this.y,50,70);
-                    ctx.fill();
-                    if (this.active != -1 && this.inactive[this.active] == 0) {
-                        ctx.beginPath();
-                        ctx.fillStyle = COLORS[1];
-                        ctx.rect(this.x,this.y + this.active*(70/5),50,70/5);
-                        ctx.fill();
-                    }
-                    ctx.fillStyle = COLORS[3];
-                    ctx.font = "bold 11px Arial"
-                    for (var i=0;i<this.items.length;i++) {
-                        if (this.inactive[i] == 1) {
-                           ctx.fillStyle = COLORS[1];
-                        }
-                        ctx.fillText(this.items[i],this.x + 2,this.y + (70/5) * i + 11);
-                        if (this.inactive[i] == 1) {
-                           ctx.fillStyle = COLORS[3];
-                        }
-                    }
-                }
-                this.update = function() {
-                    if (mouse.x > this.x && mouse.x < this.x + 50 && mouse.y > this.y && mouse.y < this.y + 70) {
-                        this.active = Math.floor((mouse.y - this.y) / (70/5));
-                    } else {
-                        this.active = -1;
-                    }
-                    if (mouse.click) {
-                        mouse.click = false;
-                        if (this.inactive[this.active] == 0) {
-                            if (this.active == 0) {
-                                this.group.split();
-                            } else if (this.active == 1) {
-                                movingGroup = group;
-                            } else if (this.active == 2) {
-                                add(new BuildingMenu(this.group));
-                            } else if (this.active == 3) {
-                                attackGroup = group;
-                            } else if (this.active == 4) {
-                                this.group.actions = 0;
-                            }
-                        }
-                        /* List is removed whether action occurs or not
-                        Unless it is an inactive item
-                        */
-                        if (this.inactive[this.active] == 0 || this.active == -1) {
-                            remove(this);
-                            this.group.list = null;
-                        }
-                    }
-                }
-            }
+                    state.inactive[0] = 1;
 
-            function Message(text,y,length,callBack) {
-                this.zIndex = 101;
-                this.text = text;
-                this.y = y;
+                return state;
+            };
+
+            const Message = (text,y,length,callBack) => {
+                let state = Object.assign(
+                  GameObject(0,y),
+                  {
+                    zIndex: 101,
+                    text,
+                    length: -1,
+                    height: 0,
+                    step: 1,
+                    draw: () => {
+                      message = true;
+                      _ctx.fillStyle = COLORS[0];
+                      _ctx.beginPath();
+                      _ctx.rect(0,state.y,240,state.height);
+                      _ctx.fill();
+                      if (state.step == 1) {
+                          state.height += 5;
+                          state.y -= 2.5;
+                          if (state.height >= 50)
+                              state.step = 2;
+                      }
+                      if (state.step == 2) {
+                          state.length -= 1;
+                          _ctx.fillStyle = COLORS[3];
+                          _ctx.font = "bold 24px Arial"
+                          _ctx.fillText(state.text,10,state.y + 32);
+                          if (state.length <= 1 && state.length > 0)
+                              state.step = 3;
+                          if (state.length < 0 && mouse.click)
+                              state.step = 3;
+                      }
+                      if (state.step == 3) {
+                          state.height -= 5;
+                          state.y += 2.5;
+                          if (state.height <= 0) {
+                              state.step = 4;
+                              message = false;
+                              remove(state);
+                              state.draw = null;
+                              if (callBack)
+                                  callBack();
+                              return;
+                          }
+                      }
+                    },
+                  }
+                );
+
+                /* How long should the message appear for */
                 if (length)
-                    this.length = length;
-                else
-                    this.length = -1;
-                this.height = 0;
-                this.step = 1;
-                this.draw = function() {
-                    message = true;
-                    ctx.fillStyle = COLORS[0];
-                    ctx.beginPath();
-                    ctx.rect(0,this.y,240,this.height);
-                    ctx.fill();
-                    if (this.step == 1) {
-                        this.height += 5;
-                        this.y -= 2.5;
-                        if (this.height >= 50)
-                            this.step = 2;
-                    }
-                    if (this.step == 2) {
-                        this.length -= 1;
-                        ctx.fillStyle = COLORS[3];
-                        ctx.font = "bold 24px Arial"
-                        ctx.fillText(this.text,10,this.y + 32);
-                        if (this.length <= 1 && this.length > 0)
-                            this.step = 3;
-                        if (this.length < 0 && mouse.click)
-                            this.step = 3;
-                    }
-                    if (this.step == 3) {
-                        this.height -= 5;
-                        this.y += 2.5;
-                        if (this.height <= 0) {
-                            this.step = 4;
-                            message = false;
-                            remove(this);
-                            this.draw = null;
-                            if (callBack)
-                                callBack();
-                            return;
-                        }
-                    }
-                }
-            }
+                    state.length = length;
+
+                return state;
+            };
 
             /* Simple timer */
-            function Timer(time,callBack) {
-              this.time = Date.now() + time;
-              this.draw = function() {
-                if (Date.now() >= this.time) {
-                  if (callBack)
-                    callBack();
+            const Timer = (time,callBack) => {
+              let state = Object.assign(
+                GameObject(0,0),
+                {
+                  time: Date.now() + time,
+                  draw: () => {
+                    if (Date.now() >= state.time) {
+                      if (callBack)
+                        callBack();
 
-                  remove(this);
+                      remove(state);
+                    }
+                  }
                 }
-              }
-            }
+              );
+              return state;
+            };
 
 
             function pushGroup(x,y,enemy) {
-                var newGroup = add(new Group(x, y,enemy));
+                let newGroup = add(Group(x, y,enemy));
                 if (enemy == true) {
                     enemyGroups.push(newGroup);
                 } else {
@@ -573,7 +643,7 @@
 
             function remove(obj) {
                 if (obj.ID != null)
-                    for (var i=0;i<objects.length;i++) {
+                    for (let i=0;i<objects.length;i++) {
                         if (obj.ID == objects[i].ID) {
                             objects.splice(i,1);
                             return obj;
@@ -598,8 +668,8 @@
                 message = false;
                 buildings = [];
                 bMActive = false;
-                c.style.cursor = "default";
-                state = newState;
+                _canvas.style.cursor = "default";
+                gameState = newState;
             }
 
             function beginLevel() {
@@ -609,7 +679,7 @@
                 bgDraw();
                 /* Start turn after flash */
                 startFX(FLASH,{complete: () => {
-                    if (state == GAME_STATE)
+                    if (gameState == GAME_STATE)
                         turnSwitch(true);
                 }, time: 20});
                 if (level == 1) {
@@ -646,17 +716,17 @@
             function turnSwitch(player) {
                 if (player == true) {
                     turn = "buildings";
-                    add(new Message("PLAYER TURN",120,90));
+                    add(Message("PLAYER TURN",120,90));
                     /* Reset all groups */
-                    for (var i=0;i<groups.length;i++) {
+                    for (let i=0;i<groups.length;i++) {
                         if (groups[i])
-                        groups[i].actions = 2;
+                          groups[i].actions = 2;
                     }
                 } else {
                     whichEnemy = 0;
                     turn = "enemy";
-                    add(new Message("ENEMY TURN",120,90,enemyTurn));
-                    for (var i=0;i<enemyGroups.length;i++) {
+                    add(Message("ENEMY TURN",120,90,enemyTurn));
+                    for (let i=0;i<enemyGroups.length;i++) {
                         if (enemyGroups[i])
                             enemyGroups[i].actions = 2;
                     }
@@ -664,11 +734,11 @@
             }
 
             function createTroops(num,x,y,group) {
-                for (var i=0;i<num;i++) {
+                for (let i=0;i<num;i++) {
                     if (group.enemy == true) {
-                        group.members.push(new Troop(x,y,6));
+                        group.members.push(Troop(x,y,6));
                     } else {
-                        group.members.push(new Troop(x,y,Math.floor(Math.random() * 6)));
+                        group.members.push(Troop(x,y,Math.floor(Math.random() * 6)));
                     }
                 }
                 return group;
@@ -676,7 +746,7 @@
 
             /* Fun extra visual function (can be cut for more space) */
             function shuffleGroup(group,magnitude) {
-                for (var i=0;i<group.members.length;i++) {
+                for (let i=0;i<group.members.length;i++) {
                     group.members[i].goto = [Math.random() * magnitude*2 - magnitude,Math.random() * magnitude*2 - magnitude]
                 }
                 return group;
@@ -687,7 +757,7 @@
               if (obj.x && obj.y)
                 targetedSprite = obj;
 
-              add(new Timer(time,() => {
+              add(Timer(time,() => {
                 targetedSprite = null;
                 callBack();
               }));
@@ -695,27 +765,27 @@
 
             function sortObjects() {
                 /* Sort buildings */
+                let error = false;
                 if (buildings)
-                do {
-                    error = false;
-                    for (var i=0;i<buildings.length-1;i++) {
-                        if (buildings[i].y < buildings[i+1].y) {
-                            var temp = buildings[i];
-                            buildings[i] = buildings[i+1];
-                            buildings[i+1] = temp;
-                            error = true;
-                        }
-                        buildings[i].zIndex = 1 - i/10;
-                    }
-                } while (error == true);
+                  do {
+                      error = false;
+                      for (let i=0;i<buildings.length-1;i++) {
+                          if (buildings[i].y < buildings[i+1].y) {
+                              let temp = buildings[i];
+                              buildings[i] = buildings[i+1];
+                              buildings[i+1] = temp;
+                              error = true;
+                          }
+                          buildings[i].zIndex = 1 - i/10;
+                      }
+                  } while (error == true);
 
                 /* Sort every other sprite */
-                var error = false;
                 do {
                     error = false;
-                    for (var i=0;i<objects.length-1;i++) {
+                    for (let i=0;i<objects.length-1;i++) {
                         if (objects[i].zIndex > objects[i+1].zIndex) {
-                            var temp = objects[i];
+                            let temp = objects[i];
                             objects[i] = objects[i+1];
                             objects[i+1] = temp;
                             error = true;
@@ -723,58 +793,58 @@
                     }
                 } while (error == true);
             }
-            var sineOffset = 0;
+
             function draw() {
                 requestAnimationFrame(draw);
                 /* STATE MANAGER */
-                if (state == GAME_STATE) {
+                if (gameState == GAME_STATE) {
                     if (turn == "enemy")
                         gameEnemyUpdate();
                     else if (turn == "player")
                         gameUpdate();
                     else if (turn == "buildings")
                         gameBuildingsUpdate();
-                } else if (state == MENU_STATE) {
+                } else if (gameState == MENU_STATE) {
                     menuUpdate();
                 }
                 sortObjects();
-                ctx.clearRect(0,0,480,480);
+                _ctx.clearRect(0,0,480,480);
                 /*Sprites*/
-                for (var i=0;i<objects.length;i++) {
+                for (let i=0;i<objects.length;i++) {
                     objects[i].draw();
                 }
 
                 /*Game State specific stuff */
-                if (state == GAME_STATE) {
+                if (gameState == GAME_STATE) {
                     /* Border around range */
                     if (movingGroup != null) {
-                        ctx.beginPath();
-                        for (var i=0;i<20;i++) {
-                            var startAngle = (Math.PI*2/20)*i + movingGroup.rangeAngle;
-                            var endAngle = startAngle + Math.PI*2/40
-                            ctx.moveTo(movingGroup.range[0] + Math.cos(startAngle)*movingGroup.range[2],movingGroup.range[1] + Math.sin(startAngle)*movingGroup.range[2]);
-                            ctx.arc(movingGroup.range[0],movingGroup.range[1],movingGroup.range[2],startAngle,endAngle);
+                        _ctx.beginPath();
+                        for (let i=0;i<20;i++) {
+                            let startAngle = (Math.PI*2/20)*i + movingGroup.rangeAngle;
+                            let endAngle = startAngle + Math.PI*2/40
+                            _ctx.moveTo(movingGroup.range[0] + Math.cos(startAngle)*movingGroup.range[2],movingGroup.range[1] + Math.sin(startAngle)*movingGroup.range[2]);
+                            _ctx.arc(movingGroup.range[0],movingGroup.range[1],movingGroup.range[2],startAngle,endAngle);
                         }
-                        ctx.stroke();
+                        _ctx.stroke();
                         movingGroup.rangeAngle += Math.PI / 100;
                     }
 
                     /*Targeted sprite*/
                     if (targetedSprite != null) {
                       /* Draw target around sprite */
-                      ctx.drawImage(graphics,16*6,16,16,16,targetedSprite.x - 8,targetedSprite.y - 8,16,16);
+                      _ctx.drawImage(graphics,16*6,16,16,16,targetedSprite.x - 8,targetedSprite.y - 8,16,16);
                     }
 
                     /* HUD */
                     if (bMActive == false) {
-                        ctx.fillStyle = COLORS[1];
-                        ctx.strokeStyle = COLORS[0];
-                        ctx.beginPath();
-                        ctx.rect(-2,-2,244,16);
-                        ctx.fill();
-                        ctx.stroke();
-                        ctx.textAlign = "center";
-                        var txt;
+                        _ctx.fillStyle = COLORS[1];
+                        _ctx.strokeStyle = COLORS[0];
+                        _ctx.beginPath();
+                        _ctx.rect(-2,-2,244,16);
+                        _ctx.fill();
+                        _ctx.stroke();
+                        _ctx.textAlign = "center";
+                        let txt;
                         if (movingGroup != null) {
                             txt = "Moving Group";
                         } else if (attackGroup != null) {
@@ -786,31 +856,31 @@
                         } else {
                             txt = "";
                         }
-                        ctx.font = "bold 8px Arial";
-                        ctx.fillStyle = COLORS[3];
-                        ctx.fillText(txt,120,10);
-                        ctx.textAlign = "left";
+                        _ctx.font = "bold 8px Arial";
+                        _ctx.fillStyle = COLORS[3];
+                        _ctx.fillText(txt,120,10);
+                        _ctx.textAlign = "left";
                     }
-                } else if (state == MENU_STATE) {
+                } else if (gameState == MENU_STATE) {
                     /*Sine wave*/
-                    var flag = {x: 25, y: 90,period: 1.5,size: 50,width:80,wave: 5};
+                    let flag = {x: 25, y: 90,period: 1.5,size: 50,width:80,wave: 5};
                     flag.y = flag.y - flag.wave*Math.sin((((sineOffset)/flag.width-1)*(Math.PI*2))/flag.period);
-                    ctx.beginPath();
-                    ctx.fillStyle = COLORS[3];
-                    for (var s=0;s<2;s++) {
+                    _ctx.beginPath();
+                    _ctx.fillStyle = COLORS[3];
+                    for (let s=0;s<2;s++) {
                         if (s==0)
-                            ctx.moveTo(flag.x,(flag.y + s*flag.size)+flag.wave*Math.sin((((sineOffset)/flag.width-1)*(Math.PI*2))/flag.period));
+                            _ctx.moveTo(flag.x,(flag.y + s*flag.size)+flag.wave*Math.sin((((sineOffset)/flag.width-1)*(Math.PI*2))/flag.period));
                         else if (s==1)
-                            ctx.lineTo(flag.x+flag.width-1,flag.y+flag.size + flag.wave*Math.sin((((sineOffset+flag.width-1)/flag.width-1)*(Math.PI*2))/flag.period));
-                        for (var i=0;i<flag.width;i++) {
+                            _ctx.lineTo(flag.x+flag.width-1,flag.y+flag.size + flag.wave*Math.sin((((sineOffset+flag.width-1)/flag.width-1)*(Math.PI*2))/flag.period));
+                        for (let i=0;i<flag.width;i++) {
                             if (s==0)
-                                ctx.lineTo(flag.x+i,(flag.y + s*flag.size)+flag.wave*Math.sin((((i+sineOffset)/flag.width-1)*(Math.PI*2))/flag.period));
+                                _ctx.lineTo(flag.x+i,(flag.y + s*flag.size)+flag.wave*Math.sin((((i+sineOffset)/flag.width-1)*(Math.PI*2))/flag.period));
                             if (s==1)
-                                ctx.lineTo(flag.x+flag.width-1-i,(flag.y + s*flag.size)+flag.wave*Math.sin((((flag.width-i+sineOffset)/flag.width-1)*(Math.PI*2))/flag.period));
+                                _ctx.lineTo(flag.x+flag.width-1-i,(flag.y + s*flag.size)+flag.wave*Math.sin((((flag.width-i+sineOffset)/flag.width-1)*(Math.PI*2))/flag.period));
                         }
                     }
-                    ctx.closePath();
-                    ctx.fill();
+                    _ctx.closePath();
+                    _ctx.fill();
                     sineOffset--;
                 }
 
@@ -830,23 +900,23 @@
                         fps = frames;
                         frames = 0;
                     }
-                    ctx.fillStyle = "#FF0000";
-                    ctx.font = "bold 8px Arial";
-                    ctx.textAlign = "left";
-                    ctx.fillText("FPS: "+fps,0,10);
+                    _ctx.fillStyle = "#FF0000";
+                    _ctx.font = "bold 8px Arial";
+                    _ctx.textAlign = "left";
+                    _ctx.fillText("FPS: "+fps,0,10);
                 }*/
             }
 
             /* Run this function if all the player groups die */
             function gameOver() {
                 turn = "gameOver";
-                add(new Message("GAME OVER!",120,-1, gameStart));
+                add(Message("GAME OVER!",120,-1, gameStart));
             }
 
             function win() {
                 turn = "win";
                 level++;
-                add(new Message("STAGE CLEAR",120,-1, () => {
+                add(Message("STAGE CLEAR",120,-1, () => {
                     startFX(FADE,{complete: beginLevel, time: 20});
                 }));
             }
@@ -858,9 +928,9 @@
                     if (distance < movingGroup.range[2]) {
                         movingGroup.goto = [mouse.x - 8,mouse.y - 8];
                     } else {
-                        var angle = Math.atan(((mouse.y - 8) - movingGroup.range[1])/((mouse.x - 8) - movingGroup.range[0]));
+                        let angle = Math.atan(((mouse.y - 8) - movingGroup.range[1])/((mouse.x - 8) - movingGroup.range[0]));
 
-                        var direction = [1,1];
+                        let direction = [1,1];
                         if ((mouse.x - 8) - movingGroup.range[0] < 0) {
                             direction[0] = -1;
                             direction[1] = -1;
@@ -876,8 +946,8 @@
                     }
                 }
                 /* Check if player groups are still alive */
-                var alive = false;
-                for (var i=0;i<groups.length;i++) {
+                let alive = false;
+                for (let i=0;i<groups.length;i++) {
                     if (groups[i] != null)
                         alive = true
                 }
@@ -888,7 +958,7 @@
 
                 /* Check if enemy groups are still alive */
                 alive = false;
-                for (var i=0;i<enemyGroups.length;i++) {
+                for (let i=0;i<enemyGroups.length;i++) {
                     if (enemyGroups[i] != null)
                         alive = true
                 }
@@ -900,8 +970,8 @@
                 /* End turn when all actions are used up */
                 if (groups && turn == "player")
                     if (groups.length > 0) {
-                        var totalActions = 0;
-                        for (var i=0;i<groups.length;i++)
+                        let totalActions = 0;
+                        for (let i=0;i<groups.length;i++)
                             if (groups[i])
                                 totalActions += groups[i].actions;
                         if (totalActions == 0)
@@ -914,7 +984,7 @@
                 mouse.click = false;
                 if (message != false)
                   return;
-                for (var i=0; i < buildings.length; i++) {
+                for (let i=0; i < buildings.length; i++) {
                   if (buildings[i].actionStatus == "start")
                     buildings[i].action();
 
@@ -923,13 +993,13 @@
                 }
 
                 /* Once all building actions are complete switch control to player and reset buildings*/
-                for (var i=0; i < buildings.length; i++)
+                for (let i=0; i < buildings.length; i++)
                   buildings[i].actionStatus = "start";
                 turn = "player";
             }
 
             function gameEnemyUpdate() {
-                var e = enemyGroups[whichEnemy];
+                let e = enemyGroups[whichEnemy];
                 if (message == false && enemyGroups[whichEnemy] && enemyGroups[whichEnemy].goto == null) {
                     /* This is the enemy AI
                         Priorities:
@@ -943,9 +1013,9 @@
                     Goal: Choose weakest and closest group to move towards and attack
                     */
                     /* Determine what to advance on */
-                    var distances = [];
-                    var target = 0;
-                    for (var i=0; i < groups.length; i++) {
+                    let distances = [];
+                    let target = 0;
+                    for (let i=0; i < groups.length; i++) {
                         distances[i] = Math.sqrt(Math.pow(groups[i].x - e.x,2)+Math.pow(groups[i].y - e.y,2));
                         if (distances[i-1] && distances[i] < distances[i-1])
                             target = i;
@@ -953,21 +1023,21 @@
                     /* Make sure target is worth going for and that the enemy can even still move*/
                     if (Math.floor(distances[target]) > 42 && e.actions > 0) {
                         if (distances[target] > e.range[2] && distances[target] - e.range[2] > 42) {
-                            var ratio = e.range[2] / distances[target];
+                            let ratio = e.range[2] / distances[target];
                             e.goto = [];
                             e.goto[0] = (groups[target].x - e.x)*ratio + e.x;
                             e.goto[1] = (groups[target].y - e.y)*ratio + e.y;
                             e.actions -= 1;
                             return;
                         } else {
-                            var direction = [groups[target].x - e.x,groups[target].y - e.y];
+                            let direction = [groups[target].x - e.x,groups[target].y - e.y];
                             direction = [-Math.abs(direction[0])/direction[0],-Math.abs(direction[1])/direction[1]];
                             if (isNaN(direction[0]))
                                 direction[0] = 0;
                             if (isNaN(direction[1]))
                                 direction[1] = 0;
 
-                            var angle = Math.atan(-(e.y - groups[target].y) / (e.x - groups[target].x));
+                            let angle = Math.atan(-(e.y - groups[target].y) / (e.x - groups[target].x));
                             e.goto = [groups[target].x + Math.abs(42*Math.cos(angle))*direction[0],groups[target].y + Math.abs(42*Math.sin(angle))*direction[1]];
                             e.actions -= 1;
                             return;
@@ -978,7 +1048,7 @@
                     Attack the closest player group
                     */
                     if (e.actions > 0 && groups[target]) {
-                        var counter = groups[target].members.length;
+                        let counter = groups[target].members.length;
                         groups[target].members.splice(0,e.members.length);
 
                         e.members.splice(0,counter / 2);
@@ -1018,14 +1088,14 @@
             function menuUpdate() {
                 /* Click the start button */
                 if (mouse.x > 165 -52 && mouse.x < 165+52 && mouse.y > 168 && mouse.y < 202) {
-                    c.style.cursor = "pointer";
+                    _canvas.style.cursor = "pointer";
                     if (mouse.click && !fx.type) {
                         level = 1;
                         startFX(CIRCLE_TRANSITION,{complete: beginLevel});
-                        c.style.cursor = "default";
+                        _canvas.style.cursor = "default";
                     }
                 } else {
-                    c.style.cursor = "default";
+                    _canvas.style.cursor = "default";
                 }
             }
 
@@ -1053,11 +1123,11 @@
                         options.speed = 5;
                     fx.circles = [];
                     /* Build the 2d array */
-                    for (var i=0;i<options.density;i++)
+                    for (let i=0;i<options.density;i++)
                         fx.circles[i] = [];
                     /* p = y cord, i = x cord */
-                    for (var p=0;p<options.density;p++)
-                        for (var i=0;i<options.density;i++)
+                    for (let p=0;p<options.density;p++)
+                        for (let i=0;i<options.density;i++)
                             fx.circles[i][p] = 0;
 
                     fx.radius = 0;
@@ -1081,10 +1151,10 @@
             function fxDraw() {
                if (fx.type === CIRCLE_TRANSITION) {
                    /* p = y cord, i = x cord */
-                   var separation = 240 / fx.options.density;
-                   var finished = true;
-                    for (var p=0;p<fx.options.density;p++)
-                        for (var i=0;i<fx.options.density;i++) {
+                   let separation = 240 / fx.options.density;
+                   let finished = true;
+                    for (let p=0;p<fx.options.density;p++)
+                        for (let i=0;i<fx.options.density;i++) {
                             /* Don't grow circles forever */
                             if (fx.circles[i][p] < separation) {
                                 finished = false;
@@ -1094,15 +1164,15 @@
                             }
                             /* If the circle's radius is more than 0 draw it*/
                             if (fx.circles[i][p] > 0) {
-                                ctx.fillStyle = COLORS[0];
-                                ctx.beginPath()
-                                ctx.arc(i*separation+separation/2,p*separation+separation/2,fx.circles[i][p],0,Math.PI*2);
-                                ctx.fill();
+                                _ctx.fillStyle = COLORS[0];
+                                _ctx.beginPath()
+                                _ctx.arc(i*separation+separation/2,p*separation+separation/2,fx.circles[i][p],0,Math.PI*2);
+                                _ctx.fill();
                             }
                         }
                     fx.radius+= fx.options.speed;
                    if (finished == true) {
-                       var complete = fx.options.complete;
+                       let complete = fx.options.complete;
                        fx = {}
                        if (complete)
                            complete();
@@ -1110,16 +1180,16 @@
                 }
                 /* Fade transition */
                 else if (fx.type == FADE) {
-                    ctx.beginPath();
-                    ctx.globalAlpha = fx.opacity;
-                    ctx.fillStyle = fx.options.color;
-                    ctx.rect(0,0,c.width/2,c.height/2);
-                    ctx.fill();
-                    ctx.globalAlpha = 1;
+                    _ctx.beginPath();
+                    _ctx.globalAlpha = fx.opacity;
+                    _ctx.fillStyle = fx.options.color;
+                    _ctx.rect(0,0,WIDTH/2,HEIGHT/2);
+                    _ctx.fill();
+                    _ctx.globalAlpha = 1;
                     fx.opacity += 1/fx.options.time;
                     /* When complete */
                     if (fx.opacity >= 1) {
-                        var complete = fx.options.complete;
+                        let complete = fx.options.complete;
                         fx = {}
                         if (complete)
                             complete();
@@ -1127,16 +1197,16 @@
                 }
                 /* Flash effect */
                 else if (fx.type == FLASH) {
-                    ctx.beginPath();
-                    ctx.globalAlpha = fx.opacity;
-                    ctx.fillStyle = fx.options.color;
-                    ctx.rect(0,0,c.width/2,c.height/2);
-                    ctx.fill();
-                    ctx.globalAlpha = 1;
+                    _ctx.beginPath();
+                    _ctx.globalAlpha = fx.opacity;
+                    _ctx.fillStyle = fx.options.color;
+                    _ctx.rect(0,0,WIDTH/2,HEIGHT/2);
+                    _ctx.fill();
+                    _ctx.globalAlpha = 1;
                     fx.opacity -= 1/fx.options.time;
                     /* When complete */
                     if (fx.opacity <= 0) {
-                        var complete = fx.options.complete;
+                        let complete = fx.options.complete;
                         fx = {}
                         if (complete)
                             complete();
@@ -1146,134 +1216,134 @@
 
             /* Background layer doesn't have to be drawn every frame */
             function bgDraw() {
-                bgctx.clearRect(0,0,480,480);
-                if (state == GAME_STATE) {
+                _bgCtx.clearRect(0,0,480,480);
+                if (gameState == GAME_STATE) {
                     /*Background*/
                     for (var r=0;r<240/16;r++) {
                         for (var c=0;c<240/16;c++) {
-                            bgctx.drawImage(graphics,0,16,16,16,c*16,r*16,16,16);
+                            _bgCtx.drawImage(graphics,0,16,16,16,c*16,r*16,16,16);
                         }
                     }
-                } else if (state == MENU_STATE) {
+                } else if (gameState == MENU_STATE) {
                     /* Title Menu */
                     /* Background */
-                    bgctx.fillStyle = COLORS[1];
-                    bgctx.beginPath();
-                    bgctx.rect(0,0,240,120);
-                    bgctx.fill();
-                    bgctx.fillStyle = COLORS[2];
-                    bgctx.beginPath();
-                    bgctx.rect(0,120,240,120);
-                    bgctx.fill();
+                    _bgCtx.fillStyle = COLORS[1];
+                    _bgCtx.beginPath();
+                    _bgCtx.rect(0,0,240,120);
+                    _bgCtx.fill();
+                    _bgCtx.fillStyle = COLORS[2];
+                    _bgCtx.beginPath();
+                    _bgCtx.rect(0,120,240,120);
+                    _bgCtx.fill();
                     /* Sun (even though it looks like a moon)*/
-                    bgctx.fillStyle = COLORS[3];
-                    bgctx.beginPath();
-                    bgctx.arc(200,43,25,0,Math.PI*2);
-                    bgctx.fill();
+                    _bgCtx.fillStyle = COLORS[3];
+                    _bgCtx.beginPath();
+                    _bgCtx.arc(200,43,25,0,Math.PI*2);
+                    _bgCtx.fill();
                     /*Castle Begin*/
-                    bgctx.fillStyle = COLORS[0];
-                    bgctx.beginPath();
-                    bgctx.rect(100,70,130,70);
-                    bgctx.fill();
-                    bgctx.beginPath();
-                    bgctx.rect(100,50,20,20);
-                    bgctx.fill();
-                    bgctx.beginPath();
-                    bgctx.rect(100,50-20/3,20/3,20/3);
-                    bgctx.fill();
-                    bgctx.beginPath();
-                    bgctx.rect(100+40/3,50-20/3,20/3,20/3);
-                    bgctx.fill();
-                    bgctx.beginPath();
-                    bgctx.rect(210,50-20/3,20/3,20/3);
-                    bgctx.fill();
-                    bgctx.beginPath();
-                    bgctx.rect(210+40/3,50-20/3,20/3,20/3);
-                    bgctx.fill();
+                    _bgCtx.fillStyle = COLORS[0];
+                    _bgCtx.beginPath();
+                    _bgCtx.rect(100,70,130,70);
+                    _bgCtx.fill();
+                    _bgCtx.beginPath();
+                    _bgCtx.rect(100,50,20,20);
+                    _bgCtx.fill();
+                    _bgCtx.beginPath();
+                    _bgCtx.rect(100,50-20/3,20/3,20/3);
+                    _bgCtx.fill();
+                    _bgCtx.beginPath();
+                    _bgCtx.rect(100+40/3,50-20/3,20/3,20/3);
+                    _bgCtx.fill();
+                    _bgCtx.beginPath();
+                    _bgCtx.rect(210,50-20/3,20/3,20/3);
+                    _bgCtx.fill();
+                    _bgCtx.beginPath();
+                    _bgCtx.rect(210+40/3,50-20/3,20/3,20/3);
+                    _bgCtx.fill();
 
-                    bgctx.beginPath();
-                    bgctx.rect(165-15,20,30,50);
-                    bgctx.fill();
+                    _bgCtx.beginPath();
+                    _bgCtx.rect(165-15,20,30,50);
+                    _bgCtx.fill();
 
-                    bgctx.beginPath();
-                    bgctx.rect(165-15,20-30/3,30/3,30/3);
-                    bgctx.fill();
+                    _bgCtx.beginPath();
+                    _bgCtx.rect(165-15,20-30/3,30/3,30/3);
+                    _bgCtx.fill();
 
-                    bgctx.beginPath();
-                    bgctx.rect(165-15 + 60/3,20-30/3,30/3,30/3);
-                    bgctx.fill();
+                    _bgCtx.beginPath();
+                    _bgCtx.rect(165-15 + 60/3,20-30/3,30/3,30/3);
+                    _bgCtx.fill();
 
                     /*Right Arm*/
-                    bgctx.beginPath();
-                    bgctx.moveTo(180,50);
-                    bgctx.lineTo(190,40);
-                    bgctx.lineTo(190,20);
-                    bgctx.lineTo(200,20);
-                    bgctx.lineTo(200,50);
-                    bgctx.lineTo(180,60);
-                    bgctx.closePath();
-                    bgctx.fill();
+                    _bgCtx.beginPath();
+                    _bgCtx.moveTo(180,50);
+                    _bgCtx.lineTo(190,40);
+                    _bgCtx.lineTo(190,20);
+                    _bgCtx.lineTo(200,20);
+                    _bgCtx.lineTo(200,50);
+                    _bgCtx.lineTo(180,60);
+                    _bgCtx.closePath();
+                    _bgCtx.fill();
                     /* Left Arm */
-                    bgctx.beginPath();
-                    bgctx.moveTo(150,50);
-                    bgctx.lineTo(140,40);
-                    bgctx.lineTo(140,20);
-                    bgctx.lineTo(130,20);
-                    bgctx.lineTo(130,50);
-                    bgctx.lineTo(150,60);
-                    bgctx.closePath();
-                    bgctx.fill();
+                    _bgCtx.beginPath();
+                    _bgCtx.moveTo(150,50);
+                    _bgCtx.lineTo(140,40);
+                    _bgCtx.lineTo(140,20);
+                    _bgCtx.lineTo(130,20);
+                    _bgCtx.lineTo(130,50);
+                    _bgCtx.lineTo(150,60);
+                    _bgCtx.closePath();
+                    _bgCtx.fill();
 
-                    bgctx.beginPath();
-                    bgctx.rect(210,50,20,20);
-                    bgctx.fill();
+                    _bgCtx.beginPath();
+                    _bgCtx.rect(210,50,20,20);
+                    _bgCtx.fill();
 
                     /*Flag pole*/
-                    bgctx.beginPath();
-                    bgctx.rect(20,85,5,130);
-                    bgctx.fill();
+                    _bgCtx.beginPath();
+                    _bgCtx.rect(20,85,5,130);
+                    _bgCtx.fill();
 
                     /* Start Button */
-                    var bP = {x: 165 - 50, y: 170}
-                    bgctx.strokeStyle = COLORS[3];
-                    bgctx.lineWidth = 2;
-                    bgctx.fillStyle = COLORS[2];
-                    bgctx.beginPath();
-                    bgctx.rect(bP.x,bP.y,100,30);
-                    bgctx.fill();
-                    bgctx.stroke();
-                    bgctx.fillStyle = COLORS[1];
-                    bgctx.beginPath();
-                    bgctx.rect(bP.x - 1,bP.y + 31,102,5);
-                    bgctx.fill();
-                    bgctx.fillStyle = COLORS[1];
-                    bgctx.textAlign = "center";
-                    bgctx.font = "bold 18px Arial";
-                    bgctx.fillText("Start",bP.x + 50,bP.y + 22);
+                    let bP = {x: 165 - 50, y: 170}
+                    _bgCtx.strokeStyle = COLORS[3];
+                    _bgCtx.lineWidth = 2;
+                    _bgCtx.fillStyle = COLORS[2];
+                    _bgCtx.beginPath();
+                    _bgCtx.rect(bP.x,bP.y,100,30);
+                    _bgCtx.fill();
+                    _bgCtx.stroke();
+                    _bgCtx.fillStyle = COLORS[1];
+                    _bgCtx.beginPath();
+                    _bgCtx.rect(bP.x - 1,bP.y + 31,102,5);
+                    _bgCtx.fill();
+                    _bgCtx.fillStyle = COLORS[1];
+                    _bgCtx.textAlign = "center";
+                    _bgCtx.font = "bold 18px Arial";
+                    _bgCtx.fillText("Start",bP.x + 50,bP.y + 22);
 
                     /*Title text*/
-                    bgctx.shadowColor = COLORS[2];
-                    bgctx.shadowOffsetY = 2;
-                    bgctx.font = "bold 32px Arial";
-                    bgctx.textAlign = "center";
-                    bgctx.fillStyle = COLORS[3];
-                    bgctx.fillText("Split",47,33);
-                    bgctx.fillText("Army",47,63);
-                    bgctx.shadowOffsetY = 0;
+                    _bgCtx.shadowColor = COLORS[2];
+                    _bgCtx.shadowOffsetY = 2;
+                    _bgCtx.font = "bold 32px Arial";
+                    _bgCtx.textAlign = "center";
+                    _bgCtx.fillStyle = COLORS[3];
+                    _bgCtx.fillText("Split",47,33);
+                    _bgCtx.fillText("Army",47,63);
+                    _bgCtx.shadowOffsetY = 0;
                 }
             }
 
             /* Extra Stuff */
-            document.getElementById("f").onclick = function() {
+            document.getElementById("f").onclick = () => {
                 if (fullscreen == false) {
-                    if (gmdiv.webkitRequestFullscreen)
-                        gmdiv.webkitRequestFullscreen();
-                    if (gmdiv.requestFullscreen)
-                        gmdiv.requestFullscreen();
-                    if (gmdiv.mozRequestFullScreen)
-                        gmdiv.mozRequestFullScreen();
-                    if (gmdiv.msRequestFullscreen)
-                        gmdiv.msRequestFullscreen();
+                    if (_gameDiv.webkitRequestFullscreen)
+                        _gameDiv.webkitRequestFullscreen();
+                    if (_gameDiv.requestFullscreen)
+                        _gameDiv.requestFullscreen();
+                    if (_gameDiv.mozRequestFullScreen)
+                        _gameDiv.mozRequestFullScreen();
+                    if (_gameDiv.msRequestFullscreen)
+                        _gameDiv.msRequestFullscreen();
                 } else {
                     if (document.exitFullscreen)
 	                   document.exitFullscreen();
@@ -1287,38 +1357,38 @@
             }
             /* Resize Canvas for fullscreen-ness */
             function FShandler() {
-                var canvases = gmdiv.childNodes;
+                let canvases = _gameDiv.childNodes;
                 if (fullscreen == false) {
                     fullscreen = true;
                     if (window.screen.width > window.screen.height) {
-                        gmdiv.style.height = screen.height;
-                        gmdiv.style.width = screen.height;
-                        gmdiv.style.margin = "auto";
+                        _gameDiv.style.height = screen.height;
+                        _gameDiv.style.width = screen.height;
+                        _gameDiv.style.margin = "auto";
                         for (var i=0; i<canvases.length;i++){
                             canvases[i].style.width = screen.height;
                             canvases[i].style.height = screen.height;
-                            if (gmdiv.offsetWidth > screen.height)
+                            if (_gameDiv.offsetWidth > screen.height)
                                 canvases[i].style.left = screen.width/2 - screen.height/2;
                         }
                     } else {
-                        gmdiv.style.width = screen.width;
-                        gmdiv.style.height = screen.width;
-                        gmdiv.style.margin = "auto";
+                        _gameDiv.style.width = screen.width;
+                        _gameDiv.style.height = screen.width;
+                        _gameDiv.style.margin = "auto";
                         for (var i=0; i<canvases.length;i++){
                             canvases[i].style.width = screen.width;
                             canvases[i].style.height = screen.width;
-                            if (gmdiv.offsetHeight > screen.width)
+                            if (_gameDiv.offsetHeight > screen.width)
                                 canvases[i].style.top = screen.height/2 - screen.width/2;
                         }
                     }
                 } else {
                     fullscreen = false;
-                    gmdiv.style.width = c.width;
-                    gmdiv.style.height = c.width;
-                    gmdiv.style.margin = 0;
-                    for (var i=0; i<canvases.length;i++){
-                            canvases[i].style.width = c.width;
-                            canvases[i].style.height = c.width;
+                    _gameDiv.style.width = _canvas.width;
+                    _gameDiv.style.height = _canvas.height;
+                    _gameDiv.style.margin = 0;
+                    for (let i=0; i<canvases.length;i++){
+                            canvases[i].style.width = _canvas.width;
+                            canvases[i].style.height = _canvas.width;
                             canvases[i].style.left = 0;
                             canvases[i].style.top = 0;
                     }
@@ -1329,15 +1399,15 @@
             document.addEventListener("mozfullscreenchange", FShandler);
             document.addEventListener("MSFullscreenChange", FShandler);
 
-            document.onmousemove = function (e) {
-                var rect = c.getBoundingClientRect();
-                mouse.x = Math.round((e.clientX-rect.left)/(rect.right-rect.left)*c.width/2);
-                mouse.y = Math.round((e.clientY-rect.top)/(rect.bottom-rect.top)*c.height/2);
+            document.onmousemove =  (e) => {
+                let rect = _canvas.getBoundingClientRect();
+                mouse.x = Math.round((e.clientX-rect.left)/(rect.right-rect.left)*_canvas.width/2);
+                mouse.y = Math.round((e.clientY-rect.top)/(rect.bottom-rect.top)*_canvas.height/2);
             }
-            document.onmousedown = function (e) {mouse.down = true; mouse.click = true;}
-            document.onmouseup = function (e) {mouse.down = false;}
-            document.addEventListener("touchstart", function (e) {mouse.down = false; mouse.click = true;}, false);
-            document.addEventListener("touchend", function(e) {mouse.down = true;}, false);
+            document.onmousedown = (e) => {mouse.down = true; mouse.click = true;}
+            document.onmouseup = (e) => {mouse.down = false;}
+            document.addEventListener("touchstart", (e) => {mouse.down = false; mouse.click = true;}, false);
+            document.addEventListener("touchend", (e) => {mouse.down = true;}, false);
 
             /*Start game*/
             draw();
