@@ -162,7 +162,6 @@
                     actionStatus: "start",
                     zIndex: 1,
                     type,
-                    bN: buildings.length,
                     draw: () => {
                       if (state.type = "t") {
                           _ctx.drawImage(graphics,16,16,32,16,state.x,state.y,32,16);
@@ -189,13 +188,13 @@
                       });
                     },
                     kill: () => {
-                      buildings.splice(state.bN,1);
+                      for (let i=0;i<buildings.length;i++)
+                        if (buildings[i].ID == state.ID)
+                          buildings.splice(i,1);
                       remove(state);
                     },
                   }
                 );
-                /* Add the building to the array of buildings when created*/
-                buildings.push(state);
                 return state;
             };
 
@@ -210,7 +209,7 @@
                   GameObject(0,0),
                   {
                     zIndex: 100,
-                    buildings: [],
+                    dummyBuildings: [],
                     hover: null,
                     draw: () => {
                       state.update();
@@ -228,7 +227,7 @@
                       _ctx.fillText("Building Menu",120,24);
                       _ctx.font = "bold 6px Arial"
                       for (let i=0;i<items.length;i++) {
-                          state.buildings[i].draw();
+                          state.dummyBuildings[i].draw();
                           if (descriptions[i]) {
                               _ctx.fillStyle = COLORS[1];
                               let text = descriptions[i].split("\n");
@@ -237,7 +236,7 @@
                                      _ctx.font = "bold 7px Arial";
                                   else
                                      _ctx.font = "bold 6px Arial";
-                                  _ctx.fillText(text[t],state.buildings[i].x+16,state.buildings[i].y + 40 + 10*t);
+                                  _ctx.fillText(text[t],state.dummyBuildings[i].x+16,state.dummyBuildings[i].y + 40 + 10*t);
                               }
                           }
                       }
@@ -257,16 +256,16 @@
                       /* Check mouse position around each time and draw
                       a rectangle around it if selected */
                       state.hover = null;
-                      if (state.buildings)
-                      for (var i=0;i<state.buildings.length;i++) {
-                          if (mouse.x > state.buildings[i].x-10 && mouse.x < state.buildings[i].x + 42 && mouse.y > state.buildings[i].y-5 && mouse.y < state.buildings[i].y + 85) {
-                              state.hover = {x:state.buildings[i].x,y:state.buildings[i].y};
+                      if (state.dummyBuildings)
+                      for (var i=0;i<state.dummyBuildings.length;i++) {
+                          if (mouse.x > state.dummyBuildings[i].x-10 && mouse.x < state.dummyBuildings[i].x + 42 && mouse.y > state.dummyBuildings[i].y-5 && mouse.y < state.dummyBuildings[i].y + 85) {
+                              state.hover = {x:state.dummyBuildings[i].x,y:state.dummyBuildings[i].y};
                               /* If clicked place build */
-                              if (mouse.click && group.members.length >= state.buildings[i].mpBuild) {
+                              if (mouse.click && group.members.length >= state.dummyBuildings[i].mpBuild) {
                                   mouse.click = false;
                                   group.actions -= 1;
-                                  /* Not to be confused with state.buildings (this is the global array) */
-                                  buildings.push(add(Building(group.x - 8,group.y,state.buildings[i].type)));
+                                  /* Not to be confused with state.dummyBuildings (this is the global array) */
+                                  buildings.push(add(Building(group.x - 8,group.y,state.dummyBuildings[i].type)));
                                   group.goto = [group.x,group.y + 46];
                                   state.close();
                               }
@@ -278,8 +277,8 @@
                       }
                     },
                     close: () => {
-                      for (let i=0;i<state.buildings.length;i++) {
-                          state.buildings[i].kill();
+                      for (let i=0;i<state.dummyBuildings.length;i++) {
+                          remove(state.dummyBuildings[i]);
                       }
                       remove(state);
                       bMActive = false;
@@ -287,9 +286,9 @@
                   }
                 );
 
-                /* Add building sprites to buildings array */
+                /* Add building sprites to dummyBuildings array */
                 for (let i=0;i<items.length;i++) {
-                    state.buildings.push(add(Building(20+55*(i%4),90*(Math.floor(i/4)+1) - 50,items[i])));
+                    state.dummyBuildings.push(add(Building(20+55*(i%4),90*(Math.floor(i/4)+1) - 50,items[i])));
                 }
 
                 return state;
@@ -987,7 +986,6 @@
                 for (let i=0; i < buildings.length; i++) {
                   if (buildings[i].actionStatus == "start")
                     buildings[i].action();
-
                   if (buildings[i].actionStatus != "complete")
                     return;
                 }
