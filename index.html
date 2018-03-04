@@ -609,11 +609,13 @@
                 GameObject(0,0),
                 {
                   time: Date.now() + time,
+                  disable: false,
                   draw: () => {
-                    if (Date.now() >= state.time) {
+                    if (Date.now() >= state.time && state.disable == false) {
                       if (callBack)
                         callBack();
 
+                      state.disable = true;
                       remove(state);
                     }
                   }
@@ -641,6 +643,7 @@
             }
 
             function remove(obj) {
+              console.log(obj);
                 if (obj.ID != null)
                     for (let i=0;i<objects.length;i++) {
                         if (obj.ID == objects[i].ID) {
@@ -758,7 +761,8 @@
 
               add(Timer(time,() => {
                 targetedSprite = null;
-                callBack();
+                if (callBack)
+                  callBack();
               }));
             }
 
