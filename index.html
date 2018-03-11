@@ -60,6 +60,8 @@
         const WIDTH = 480;
         const HEIGHT = 480;
 
+        let _lastTime = Date.now();
+        let deltaTime = 1;
         let fullscreen = false;
         window.onload = () => {
             /* Game div */
@@ -89,10 +91,6 @@
             let objects = [];
             let objId = 0;
             let mouse = {x:0,y:0,down:false,click:false};
-            let deltaTime = Date.now();
-            let frames = 0;
-            let fps = 60;
-            let debug = true;
             let fx = {};
             let sineOffset = 0;
 
@@ -137,8 +135,8 @@
                     },
                     update: () => {
                       if (state.goto != null) {
-                          state.x += Math.floor(state.goto[0] - state.x)/3;
-                          state.y += Math.floor(state.goto[1] - state.y)/3;
+                          state.x += (Math.floor(state.goto[0] - state.x)/3)*deltaTime;
+                          state.y += (Math.floor(state.goto[1] - state.y)/3)*deltaTime;
                           if (state.x == state.goto[0] && state.y == state.goto[1])
                               state.goto = null;
                       }
@@ -170,6 +168,7 @@
                       }
                     },
                     action: () => {
+                      //console.log(objects);
                       /* Cancel request if action is already in progress */
                       if (state.actionStatus == "progress" || state.actionStatus == "complete")
                           return;
@@ -409,8 +408,8 @@
                           }
                       }
                       if (state.goto != null) {
-                          state.x += (state.goto[0] - state.x)/3;
-                          state.y += (state.goto[1] - state.y)/3;
+                          state.x += ((state.goto[0] - state.x)/3)*deltaTime;
+                          state.y += ((state.goto[1] - state.y)/3)*deltaTime;
                           if (Math.round(state.x) == Math.round(state.goto[0]) && Math.round(state.y) == Math.round(state.goto[1]))
                               state.goto = null;
                       }
@@ -557,40 +556,50 @@
                     length: -1,
                     height: 0,
                     step: 1,
+                    init: () => {
+                      message = true;
+                      add(Timer(250,() => {
+                        state.step = 2;
+                        if (state.length < 0) {
+                          /* This message is click triggered */
+                          return;
+                        }
+                        add(Timer(state.length, () => {
+                          state.close();
+                        }));
+                      }, () => {
+                        /* Step 1 Progress*/
+                        state.height += (50/15)*deltaTime;
+                        state.y -= (25/15)*deltaTime;
+                      }));
+                    },
+                    close: () => {
+                      state.step = 3;
+                      add(Timer(250, () => {
+                        /* Finish */
+                        message = false;
+                        remove(state);
+                        state.draw = null;
+                        if (callBack)
+                            callBack();
+                      }, () => {
+                        /* Step 3 progress */
+                        state.height -= (50/15)*deltaTime;
+                        state.y += (25/15)*deltaTime;
+                      }));
+                    },
                     draw: () => {
                       message = true;
                       _ctx.fillStyle = COLORS[0];
                       _ctx.beginPath();
                       _ctx.rect(0,state.y,240,state.height);
                       _ctx.fill();
-                      if (state.step == 1) {
-                          state.height += 5;
-                          state.y -= 2.5;
-                          if (state.height >= 50)
-                              state.step = 2;
-                      }
                       if (state.step == 2) {
-                          state.length -= 1;
                           _ctx.fillStyle = COLORS[3];
                           _ctx.font = "bold 24px Arial"
-                          _ctx.fillText(state.text,10,state.y + 32);
-                          if (state.length <= 1 && state.length > 0)
-                              state.step = 3;
+                          _ctx.fillText(state.text,10,state.y + 35);
                           if (state.length < 0 && mouse.click)
-                              state.step = 3;
-                      }
-                      if (state.step == 3) {
-                          state.height -= 5;
-                          state.y += 2.5;
-                          if (state.height <= 0) {
-                              state.step = 4;
-                              message = false;
-                              remove(state);
-                              state.draw = null;
-                              if (callBack)
-                                  callBack();
-                              return;
-                          }
+                            state.close();
                       }
                     },
                   }
@@ -600,17 +609,24 @@
                 if (length)
                     state.length = length;
 
+                /* Start timer */
+                state.init();
+
                 return state;
             };
 
             /* Simple timer */
-            const Timer = (time,callBack) => {
+            /* !!! THE FLICKER BUG HAS SOMETHING TO DO WITH THIS CLASS'S AUTO DESTROY !!! */
+            const Timer = (time,callBack,progress) => {
               let state = Object.assign(
                 GameObject(0,0),
                 {
                   time: Date.now() + time,
                   disable: false,
                   draw: () => {
+                    /* If progress callBack */
+                    if (progress)
+                      progress();
                     if (Date.now() >= state.time && state.disable == false) {
                       if (callBack)
                         callBack();
@@ -643,7 +659,6 @@
             }
 
             function remove(obj) {
-              console.log(obj);
                 if (obj.ID != null)
                     for (let i=0;i<objects.length;i++) {
                         if (obj.ID == objects[i].ID) {
@@ -718,7 +733,7 @@
             function turnSwitch(player) {
                 if (player == true) {
                     turn = "buildings";
-                    add(Message("PLAYER TURN",120,90));
+                    add(Message("PLAYER TURN",120,750));
                     /* Reset all groups */
                     for (let i=0;i<groups.length;i++) {
                         if (groups[i])
@@ -727,7 +742,7 @@
                 } else {
                     whichEnemy = 0;
                     turn = "enemy";
-                    add(Message("ENEMY TURN",120,90,enemyTurn));
+                    add(Message("ENEMY TURN",120,750,enemyTurn));
                     for (let i=0;i<enemyGroups.length;i++) {
                         if (enemyGroups[i])
                             enemyGroups[i].actions = 2;
@@ -799,6 +814,9 @@
 
             function draw() {
                 requestAnimationFrame(draw);
+                /* Calculate Deltatime */
+                deltaTime = (Date.now() - _lastTime)/(1000/60);
+                _lastTime = Date.now();
                 /* STATE MANAGER */
                 if (gameState == GAME_STATE) {
                     if (turn == "enemy")
@@ -829,7 +847,7 @@
                             _ctx.arc(movingGroup.range[0],movingGroup.range[1],movingGroup.range[2],startAngle,endAngle);
                         }
                         _ctx.stroke();
-                        movingGroup.rangeAngle += Math.PI / 100;
+                        movingGroup.rangeAngle += (Math.PI / 100)*deltaTime;
                     }
 
                     /*Targeted sprite*/
@@ -884,7 +902,7 @@
                     }
                     _ctx.closePath();
                     _ctx.fill();
-                    sineOffset--;
+                    sineOffset -= deltaTime;
                 }
 
                 /*Release mouse click event*/
@@ -894,20 +912,6 @@
                 if (fx != {}) {
                     fxDraw();
                 }
-
-                /* Debug FPS
-                if (debug) {
-                    frames++;
-                    if (Date.now() - deltaTime >= 1000) {
-                        deltaTime = Date.now();
-                        fps = frames;
-                        frames = 0;
-                    }
-                    _ctx.fillStyle = "#FF0000";
-                    _ctx.font = "bold 8px Arial";
-                    _ctx.textAlign = "left";
-                    _ctx.fillText("FPS: "+fps,0,10);
-                }*/
             }
 
             /* Run this function if all the player groups die */
