@@ -625,7 +625,7 @@
                   disable: false,
                   draw: () => {
                     /* If progress callBack */
-                    if (progress)
+                    if (progress && state.disable == false)
                       progress();
                     if (Date.now() >= state.time && state.disable == false) {
                       if (callBack)
@@ -663,6 +663,7 @@
                     for (let i=0;i<objects.length;i++) {
                         if (obj.ID == objects[i].ID) {
                             objects.splice(i,1);
+                            draw();
                             return obj;
                         }
                     }
@@ -812,22 +813,33 @@
                 } while (error == true);
             }
 
+            function gameLoop() {
+              requestAnimationFrame(gameLoop);
+
+              /* Calculate Deltatime */
+              deltaTime = (Date.now() - _lastTime)/(1000/60);
+              _lastTime = Date.now();
+
+              /* STATE MANAGER */
+              if (gameState == GAME_STATE) {
+                  if (turn == "enemy")
+                      gameEnemyUpdate();
+                  else if (turn == "player")
+                      gameUpdate();
+                  else if (turn == "buildings")
+                      gameBuildingsUpdate();
+              } else if (gameState == MENU_STATE) {
+                  menuUpdate();
+              }
+
+              /* Draw Function */
+              draw();
+
+              /*Release mouse click event*/
+              mouse.click = false;
+            }
+
             function draw() {
-                requestAnimationFrame(draw);
-                /* Calculate Deltatime */
-                deltaTime = (Date.now() - _lastTime)/(1000/60);
-                _lastTime = Date.now();
-                /* STATE MANAGER */
-                if (gameState == GAME_STATE) {
-                    if (turn == "enemy")
-                        gameEnemyUpdate();
-                    else if (turn == "player")
-                        gameUpdate();
-                    else if (turn == "buildings")
-                        gameBuildingsUpdate();
-                } else if (gameState == MENU_STATE) {
-                    menuUpdate();
-                }
                 sortObjects();
                 _ctx.clearRect(0,0,480,480);
                 /*Sprites*/
@@ -905,9 +917,6 @@
                     sineOffset -= deltaTime;
                 }
 
-                /*Release mouse click event*/
-                mouse.click = false;
-
                 /* If fx are active then draw them */
                 if (fx != {}) {
                     fxDraw();
@@ -917,7 +926,12 @@
             /* Run this function if all the player groups die */
             function gameOver() {
                 turn = "gameOver";
-                add(Message("GAME OVER!",120,-1, gameStart));
+                add(Message("GAME OVER!",120,-1, () => {
+                    startFX(FADE,{complete: () => {
+                      switchState(MENU_STATE);
+                      bgDraw();
+                    }, time: 20});
+                }));
             }
 
             function win() {
@@ -1416,7 +1430,7 @@
             document.addEventListener("touchend", (e) => {mouse.down = true;}, false);
 
             /*Start game*/
-            draw();
+            gameLoop();
             gameStart();
         }
     </script>
