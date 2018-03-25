@@ -104,7 +104,6 @@
             let bMActive;
             let turn;
             let attackGroup;
-            let targetedSprite;
             let gameState;
             let level;
             let currentBuilding = 0;
@@ -177,7 +176,10 @@
                               }
                           }
                         }
-                        buildingsActions();
+                        //Add a short buffer between building actions
+                        add(Timer(200,() => {
+                          buildingsActions();
+                        }))
                       });
                     },
                     kill: () => {
@@ -381,7 +383,10 @@
                                       attackGroup.members.splice(0,enemyLength/2);
                                       shuffleGroup(attackGroup,12);
                                       shuffleGroup(state,12);
+                                      attackGroup.update();
                                       attackGroup = null;
+                                      /* Make sure enemy is killed properly */
+                                      state.update();
                                   }
                               }
                           }
@@ -515,6 +520,7 @@
                           shuffleGroup(state,12);
                           shuffleGroup(groups[target],12);
                           groups[target].update();
+                          state.update();
 
                           state.actions -= 1;
                           state.enemyAction(callback);
@@ -719,6 +725,61 @@
               return state;
             };
 
+            /* The target sprite (targets any sprite for a specified time) */
+            const Target = (sprite,time,callBack, offset) => {
+              let state = Object.assign(
+                GameObject(sprite.x,sprite.y),
+                {
+                  zIndex: 100,
+                  alpha: 0,
+                  offset: {x: 0, y: 0},
+                  draw: () => {
+                    _ctx.globalAlpha = state.alpha;
+                    /* Draw target around sprite */
+                    _ctx.drawImage(graphics,16*6,16,16,16,sprite.x - 8 + state.offset.x,sprite.y - 8 + state.offset.y,16,16);
+                    _ctx.drawImage(graphics,0,16*2,16,16,sprite.x + 22 + state.offset.x,sprite.y - 8 + state.offset.y,16,16);
+                    _ctx.drawImage(graphics,16,16*2,16,16,sprite.x + 22 + state.offset.x,sprite.y + 22 + state.offset.y,16,16);
+                    _ctx.drawImage(graphics,16*2,16*2,16,16,sprite.x - 8 + state.offset.x,sprite.y + 22 + state.offset.y,16,16);
+
+                    _ctx.globalAlpha = 1;
+                  },
+                  update: () => {
+
+                  },
+                  fade: (time,alpha) => {
+                    let speed = (1000/time)*(alpha - state.alpha)/60;
+                    add(Timer(time,null,()=> {
+                      state.alpha += speed*deltaTime;
+                      if (state.alpha < 0)
+                        state.alpha = 0;
+                    }))
+                  },
+                  init: () => {
+                    if (offset)
+                      state.offset = offset;
+                    state.fade(time/8,1);
+                    add(Timer(time/4,() => {
+                      state.fade(time/4,0);
+                      add(Timer(time/4,() => {
+                        state.fade(time/8,1);
+                        add(Timer(time/4,() => {
+                          state.fade(time/4,0);
+                          add(Timer(time/4,() => {
+                            remove(state);
+                            if (callBack)
+                              callBack();
+                          }));
+                        }));
+                      }));
+                    }));
+                  }
+                }
+              );
+              state.init();
+
+              return state;
+            }
+
 
             function pushGroup(x,y,enemy) {
                 let newGroup = add(Group(x, y,enemy));
@@ -843,15 +904,9 @@
             }
 
             /* Visual flare to indicate that sprite is active */
-            function targetSprite(obj, time, callBack) {
+            function targetSprite(obj, time, callBack, offset) {
               if (obj.x && obj.y)
-                targetedSprite = obj;
-
-              add(Timer(time,() => {
-                targetedSprite = null;
-                if (callBack)
-                  callBack();
-              }));
+                add(Target(obj,time,callBack, offset));
             }
 
             function sortObjects() {
@@ -932,12 +987,6 @@
                         }
                         _ctx.stroke();
                         movingGroup.rangeAngle += (Math.PI / 100)*deltaTime;
-                    }
-
-                    /*Targeted sprite*/
-                    if (targetedSprite != null) {
-                      /* Draw target around sprite */
-                      _ctx.drawImage(graphics,16*6,16,16,16,targetedSprite.x - 8,targetedSprite.y - 8,16,16);
                     }
 
                     /* HUD */
@@ -1094,28 +1143,33 @@
                     break;
                   }
                 }
-                enemyGroups[whichEnemy].enemyAction(() => {
-                  whichEnemy++;
+                targetSprite(enemyGroups[whichEnemy],1000,() => {
+                  enemyGroups[whichEnemy].enemyAction(() => {
+                    whichEnemy++;
 
-                  /* Check to see if there are any players still standing */
-                  if (groups.length == 0) {
-                      gameOver();
-                      return;
-                  }
+                    /* Check to see if there are any players still standing */
+                    if (groups.length == 0) {
+                        gameOver();
+                        return;
+                    }
 
-                  /* Check if enemy groups are still alive */
-                  if (enemyGroups.length == 0) {
-                      win();
-                      return;
-                  }
+                    /* Check if enemy groups are still alive */
+                    if (enemyGroups.length == 0) {
+                        win();
+                        return;
+                    }
 
-                  if (whichEnemy == enemyGroups.length) {
-                      whichEnemy = 0;
-                      turnSwitch(true);
-                  } else {
-                    enemyActions();
-                  }
+                    for (let i=0; i<enemyGroups.length; i++) {
+                      if (enemyGroups[i].actions > 0) {
+                        enemyActions()
+                        return;
+                      }
+                    }
+                    /* end turn if no more enemies can move */
+                    whichEnemy = 0;
+                    turnSwitch(true);
                 });
+              },/* Offset */{x:-7,y: -7});
             }
 
             /* Update logic for the main menu */
@@ -1457,4 +1511,4 @@ darkagent for players and enemies
 lospec.com
 Kirokaze for Pallet
 !-->
-<img id="g" src="data:image/png;base64,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" alt="" />
+<img id="g" src="data:image/png;base64,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" alt="" />
