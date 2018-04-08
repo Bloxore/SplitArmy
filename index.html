@@ -107,6 +107,7 @@
             let gameState;
             let level;
             let currentBuilding = 0;
+            let enablePlayer;
 
             /* Objects */
             const GameObject = (x,y) => {
@@ -115,8 +116,21 @@
                   y,
                   zIndex: 0,
                   ID: 0,
+                  alpha: 1,
                   draw: () => {},
                   update: () => {},
+                  fade: (time,alpha,callBack) => {
+                    let speed = (1000/time)*(alpha - state.alpha)/60;
+                    add(Timer(time,()=> {
+                      if (callBack) {
+                        callBack();
+                      }
+                    },()=> {
+                      state.alpha += speed*deltaTime;
+                      if (state.alpha < 0)
+                        state.alpha = 0;
+                    }))
+                  },
                 }
                 return state;
             };
@@ -277,6 +291,8 @@
                       }
                       remove(state);
                       bMActive = false;
+                      /* Check player status */
+                      playerAction();
                     },
                   }
                 );
@@ -304,6 +320,7 @@
                     actions: 2,
                     draw: () => {
                       state.update();
+                      _ctx.globalAlpha = state.alpha;
                       for (let i=0;i<state.members.length;i++){
                           state.members[i].update();
                           state.members[i].x += state.x;
@@ -348,6 +365,7 @@
                           _ctx.fillText(state.group + ": " + state.members.length,state.x + 6.5,state.y + 30);
                           _ctx.fillText(state.actions,state.x-12.75,state.y-7);
                       }
+                      _ctx.globalAlpha = 1;
                     },
                     update: () => {
                       if (movingGroup == null) {
@@ -355,8 +373,8 @@
                       }
                       if (mouse.click == true && mouse.x > state.x - 20 && mouse.x < state.x + 32 && mouse.y > state.y - 20 && mouse.y < state.y + 32) {
                           if (enemy != true) {
-                              /* Create action command list */
-                              if (state.list == null && movingGroup == null && state.actions > 0 && message == false && bMActive == false && attackGroup == null && !fx.type) {
+                              /* Create action command list; only if player is enabled*/
+                              if (enablePlayer == true && state.list == null && movingGroup == null && state.actions > 0 && message == false && bMActive == false && attackGroup == null && !fx.type) {
                                   /* Delete all other group's lists, but be sure the group exists first.*/
                                   for (let i=0;i<groups.length;i++) {
                                       if (groups[i].list != null && groups[i].list.active == -1) {
@@ -376,33 +394,39 @@
                                   /* Initiate attack */
                                   let distance = Math.sqrt(Math.pow((state.x - attackGroup.x),2)+Math.pow((state.y - attackGroup.y),2));
                                   if (distance < 48) {
-                                      enemyLength = state.members.length;
-                                      state.members.splice(0,attackGroup.members.length);
-                                      attackGroup.actions -= 1;
-                                      /* Attacking group also takes loses */
-                                      attackGroup.members.splice(0,enemyLength/2);
-                                      shuffleGroup(attackGroup,12);
-                                      shuffleGroup(state,12);
-                                      attackGroup.update();
+                                      /* Keep the attacker local, remove global attacker */
+                                      let attacker = attackGroup;
                                       attackGroup = null;
-                                      /* Make sure enemy is killed properly */
-                                      state.update();
+
+                                      enemyLength = state.members.length;
+                                      state.members.splice(0,attacker.members.length);
+                                      attacker.actions -= 1;
+                                      /* Attacking group also takes loses */
+                                      attacker.members.splice(0,enemyLength/2);
+                                      shuffleGroup(attacker,12);
+                                      shuffleGroup(state,12);
+                                      /* Delete dead groups */
+                                      if (state.members.length < 1){
+                                          state.fade(200,0,() => {
+                                            state.kill();
+                                          });
+                                      }
+                                      if (attacker.members.length < 1){
+                                          attacker.fade(200,0,() => {
+                                            attacker.kill();
+                                          });
+                                      }
+                                      /* If either group needs to be faded start a timer */
+                                      if (attacker.members.length < 1 || state.members.length < 1) {
+                                        add(Timer(300,() => {
+                                          /* Check player status */
+                                          playerAction();
+                                        }));
+                                      } else {
+                                        /* Check player status */
+                                        playerAction();
+                                      }
                                   }
-                              }
-                          }
-                      }
-                      /* Delete dead groups */
-                      if (state.members.length < 1){
-                          remove(state);
-                          if (state.enemy == true) {
-                              for (let i=0;i<enemyGroups.length;i++) {
-                                  if (enemyGroups[i].ID == state.ID)
-                                      enemyGroups.splice(i,1);
-                              }
-                          } else {
-                              for (let i=0;i<groups.length;i++) {
-                                  if (groups[i].ID == state.ID)
-                                      groups.splice(i,1);
                               }
                           }
                       }
@@ -423,8 +447,10 @@
                               state.goto = [state.x,20];
                       }
                     },
-                    moveTo: (x,y,callBack) => {
+                    moveTo: (x,y,callBack,customTime) => {
                       let time = 400;
+                      if (customTime)
+                        time = customTime;
                       let speed = {
                         x: (1000/time)*(x - state.x)/60,
                         y: (1000/time)*(y - state.y)/60
@@ -434,27 +460,47 @@
                         state.y += speed.y*deltaTime;
                       }));
                     },
+                    kill: () => {
+                          remove(state);
+                          if (state.enemy == true) {
+                              for (let i=0;i<enemyGroups.length;i++) {
+                                  if (enemyGroups[i].ID == state.ID)
+                                      enemyGroups.splice(i,1);
+                              }
+                          } else {
+                              for (let i=0;i<groups.length;i++) {
+                                  if (groups[i].ID == state.ID)
+                                      groups.splice(i,1);
+                              }
+                          }
+                    },
                     split: () => {
                       let newGroup;
                       if (state.members.length < 2)
                           return;
                       /*Split the group, reposition and shuffle it*/
                       if (enemy == true) {
-                          newGroup = shuffleGroup(pushGroup(state.x, state.y,true),12);
+                          newGroup = pushGroup(state.x, state.y,true),12;
                       } else {
                           if (groups.length >= 4)
                               return;
-                         newGroup = shuffleGroup(pushGroup(state.x, state.y),12);
+                         newGroup = pushGroup(state.x, state.y),12;
                       }
                       newGroup.members = state.members.splice(state.members.length/2,state.members.length/2);
-                      newGroup.goto = [state.x - 26, state.y];
-                      state.goto = [state.x + 26,state.y]
-                      shuffleGroup(state,12);
-                      /* This code used to make splitting count as one action, now it does not*/
-                      /*state.actions -= 1;*/
-                      newGroup.actions = state.actions;
+                      newGroup.moveTo(state.x - 26, state.y,null,200);
+                      state.moveTo(state.x + 26,state.y, () => {
+                        shuffleGroup(state,12);
+                        shuffleGroup(newGroup,12);
+                        /* This code used to make splitting count as one action, now it does not*/
+                        /*state.actions -= 1;*/
+                        newGroup.actions = state.actions;
+                        /* Check player status */
+                        playerAction();
+                      },200);
+
                     },
                     enemyAction: (callback) => {
+                      console.log(state.actions);
                       /* This is the enemy AI
                           Priorities:
                           1) Move towards enemy
@@ -512,6 +558,7 @@
                       Attack the closest player group
                       */
                       if (state.actions > 0 && groups[target]) {
+                          state.actions -= 1;
                           let counter = groups[target].members.length;
                           groups[target].members.splice(0,state.members.length);
 
@@ -519,15 +566,29 @@
 
                           shuffleGroup(state,12);
                           shuffleGroup(groups[target],12);
-                          groups[target].update();
-                          state.update();
-
-                          state.actions -= 1;
-                          state.enemyAction(callback);
+                          /* Delete dead groups */
+                          if (state.members.length < 1){
+                              state.actions = 0;
+                              state.fade(200,0,() => {
+                                state.kill();
+                              });
+                          }
+                          if (groups[target].members.length < 1){
+                              groups[target].fade(200,0,() => {
+                                groups[target].kill();
+                              });
+                          }
+                          /* If either group needs to be faded start a timer */
+                          if (groups[target].members.length < 1 || state.members.length < 1) {
+                            add(Timer(300,() => {
+                              state.enemyAction(callback);
+                            }));
+                          } else {
+                            state.enemyAction(callback);
+                          }
                           return;
                       }
                       //All done with enemy's action. Return to main function.
-                      state.update();
                       if (callback)
                         callback();
                     },
@@ -584,16 +645,25 @@
                       if (mouse.click) {
                           mouse.click = false;
                           if (state.inactive[state.active] == 0) {
+                              //Disable player after making selection
+                              enablePlayer = false;
+                              /* Split */
                               if (state.active == 0) {
                                   state.group.split();
+                              /* Move */
                               } else if (state.active == 1) {
                                   movingGroup = group;
+                              /* Build */
                               } else if (state.active == 2) {
                                   add(BuildingMenu(state.group));
+                              /* Attack */
                               } else if (state.active == 3) {
                                   attackGroup = group;
+                              /* Rest */
                               } else if (state.active == 4) {
                                   state.group.actions = 0;
+                                  /* Check player status */
+                                  playerAction();
                               }
                           }
                           /* List is removed whether action occurs or not
@@ -746,14 +816,6 @@
                   update: () => {
 
                   },
-                  fade: (time,alpha) => {
-                    let speed = (1000/time)*(alpha - state.alpha)/60;
-                    add(Timer(time,null,()=> {
-                      state.alpha += speed*deltaTime;
-                      if (state.alpha < 0)
-                        state.alpha = 0;
-                    }))
-                  },
                   init: () => {
                     if (offset)
                       state.offset = offset;
@@ -827,6 +889,7 @@
                 message = false;
                 buildings = [];
                 bMActive = false;
+                enablePlayer = false;
                 _canvas.style.cursor = "default";
                 gameState = newState;
             }
@@ -1082,44 +1145,52 @@
 
                         movingGroup.goto = [movingGroup.range[0]-8 + Math.cos(angle)*movingGroup.range[2]*direction[0],movingGroup.range[1]-8 + Math.sin(angle)*movingGroup.range[2]*direction[1]];
                     }
+                    /* Place player where moved to*/
                     if (mouse.click) {
                         movingGroup.actions -= 1;
                         mouse.click = false;
                         movingGroup = null;
+                        /* Check player's status */
+                        playerAction();
                     }
                 }
-                /* Check if player groups are still alive */
-                let alive = false;
-                for (let i=0;i<groups.length;i++) {
-                    if (groups[i] != null)
-                        alive = true
-                }
-                if (alive == false) {
-                    gameOver();
-                    return;
-                }
+            }
 
-                /* Check if enemy groups are still alive */
-                alive = false;
-                for (let i=0;i<enemyGroups.length;i++) {
-                    if (enemyGroups[i] != null)
-                        alive = true
-                }
-                if (alive == false) {
-                    win();
-                    return;
-                }
+            /* Call once to enable player actions */
+            function playerAction() {
+              /* Check if player groups are still alive */
+              let alive = false;
+              for (let i=0;i<groups.length;i++) {
+                  if (groups[i] != null)
+                      alive = true
+              }
+              if (alive == false) {
+                  gameOver();
+                  return;
+              }
+              /* Check if enemy groups are still alive */
+              alive = false;
+              for (let i=0;i<enemyGroups.length;i++) {
+                  if (enemyGroups[i] != null)
+                      alive = true
+              }
+              if (alive == false) {
+                  win();
+                  return;
+              }
+              /* End turn when all actions are used up */
+              if (groups && turn == "player")
+                  if (groups.length > 0) {
+                      let totalActions = 0;
+                      for (let i=0;i<groups.length;i++)
+                          if (groups[i])
+                              totalActions += groups[i].actions;
+                      if (totalActions == 0)
+                          turnSwitch(false);
+                  }
 
-                /* End turn when all actions are used up */
-                if (groups && turn == "player")
-                    if (groups.length > 0) {
-                        let totalActions = 0;
-                        for (let i=0;i<groups.length;i++)
-                            if (groups[i])
-                                totalActions += groups[i].actions;
-                        if (totalActions == 0)
-                            turnSwitch(false);
-                    }
+              /* If the player can move the enable them */
+              enablePlayer = true;
             }
 
             function buildingsActions() {
@@ -1127,6 +1198,7 @@
                   /* Once all building actions are complete switch control to player and reset buildings*/
                   currentBuilding = 0;
                   turn = "player";
+                  playerAction();
                 } else {
                   buildings[currentBuilding].action();
                   currentBuilding++;
