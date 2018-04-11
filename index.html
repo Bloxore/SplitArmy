@@ -59,6 +59,8 @@
         /* Game Size */
         const WIDTH = 480;
         const HEIGHT = 480;
+        const TILEWIDTH = WIDTH/10;
+        const TILEHEIGHT = 226/5;
 
         let _lastTime = Date.now();
         let deltaTime = 1;
@@ -108,6 +110,7 @@
             let level;
             let currentBuilding = 0;
             let enablePlayer;
+            let _tileSelector;
 
             /* Objects */
             const GameObject = (x,y) => {
@@ -129,6 +132,8 @@
                       state.alpha += speed*deltaTime;
                       if (state.alpha < 0)
                         state.alpha = 0;
+                      if (state.alpha > 1)
+                        state.alpha = 1;
                     }))
                   },
                 }
@@ -305,73 +310,71 @@
                 return state;
             };
 
+            /* The group's x and y are measured in tiles, not cordinates */
             const Group = (x,y,enemy) => {
                 let state = Object.assign(
                   GameObject(x,y),
                   {
                     zIndex: 3,
-                    range: [x,y,16],
+                    range: 16,
                     enemy: false,
                     members: [],
                     group: "A",
                     goto: null,
                     list: null,
-                    rangeAngle: 0,
                     actions: 2,
                     draw: () => {
                       state.update();
                       _ctx.globalAlpha = state.alpha;
                       for (let i=0;i<state.members.length;i++){
                           state.members[i].update();
-                          state.members[i].x += state.x;
-                          state.members[i].y += state.y;
+                          state.members[i].x += state.x*TILEWIDTH+18;
+                          state.members[i].y += state.y*TILEHEIGHT+26.5;
                           state.members[i].draw();
-                          state.members[i].x -= state.x;
-                          state.members[i].y -= state.y;
+                          state.members[i].x -= state.x*TILEWIDTH+18;
+                          state.members[i].y -= state.y*TILEHEIGHT+26.5;
                       }
                       _ctx.lineWidth = 2;
                       if (enemy == true) {
                           _ctx.beginPath();
                           _ctx.strokeStyle = COLORS[0];
-                          _ctx.rect(state.x-12,state.y-12,40,40);
+                          _ctx.rect(state.x*TILEWIDTH+4,state.y*TILEHEIGHT +16.5,40,40);
                           _ctx.stroke();
                           /*Group info*/
                           _ctx.beginPath();
                           _ctx.fillStyle = COLORS[0];
-                          _ctx.rect(state.x + 16,state.y + 19,12,10);
+                          _ctx.rect(state.x*TILEWIDTH + 32,state.y*TILEHEIGHT + 46.5,12,10);
                           _ctx.fill();
                           /*Info text*/
                           _ctx.fillStyle = COLORS[3];
                           _ctx.font = "bold 8px Arial"
-                          _ctx.fillText(state.members.length,state.x + 17,state.y + 26.5);
+                          _ctx.fillText(state.members.length,state.x*TILEWIDTH + 33.5,state.y*TILEHEIGHT + 54.5);
                       } else {
                           /*Circle around group*/
                           _ctx.beginPath();
                           _ctx.strokeStyle = COLORS[0];
-                          _ctx.arc(state.x+8,state.y+8,24,0,Math.PI*2);
+                          _ctx.arc(state.x*TILEWIDTH+24,state.y*TILEHEIGHT+36.5,24,0,Math.PI*2);
                           _ctx.stroke();
                           /*Group info*/
                           _ctx.beginPath();
                           _ctx.fillStyle = COLORS[0];
-                          _ctx.rect(state.x + 6,state.y + 22,30,10);
+                          _ctx.rect(state.x*TILEWIDTH + 22,state.y*TILEHEIGHT + 50.5,30,10);
                           _ctx.fill();
                           /* Action counter */
                           _ctx.beginPath();
-                          _ctx.arc(state.x - 10,state.y - 10,5,0,Math.PI*2);
+                          _ctx.arc(state.x*TILEWIDTH + 6,state.y*TILEHEIGHT + 18.5,5,0,Math.PI*2);
                           _ctx.fill();
                           /*Info text*/
                           _ctx.fillStyle = COLORS[3];
                           _ctx.font = "bold 8px Arial"
-                          _ctx.fillText(state.group + ": " + state.members.length,state.x + 6.5,state.y + 30);
-                          _ctx.fillText(state.actions,state.x-12.75,state.y-7);
+                          _ctx.fillText(state.group + ": " + state.members.length,state.x*TILEWIDTH + 22.5,state.y*TILEHEIGHT + 58.5);
+                          _ctx.fillText(state.actions,state.x*TILEWIDTH+3.25,state.y*TILEHEIGHT+21.5);
                       }
                       _ctx.globalAlpha = 1;
                     },
                     update: () => {
-                      if (movingGroup == null) {
-                              state.range = [state.x,state.y,32+ Math.log(state.members.length)*16]
-                      }
-                      if (mouse.click == true && mouse.x > state.x - 20 && mouse.x < state.x + 32 && mouse.y > state.y - 20 && mouse.y < state.y + 32) {
+                      state.range = Math.ceil(state.members.length/10);
+                      if (mouse.click == true && mouse.x > state.x*TILEWIDTH && mouse.x < state.x*TILEWIDTH + 48 && mouse.y > state.y*TILEWIDTH && mouse.y < state.y*TILEWIDTH + 45) {
                           if (enemy != true) {
                               /* Create action command list; only if player is enabled*/
                               if (enablePlayer == true && state.list == null && movingGroup == null && state.actions > 0 && message == false && bMActive == false && attackGroup == null && !fx.type) {
@@ -452,12 +455,23 @@
                       if (customTime)
                         time = customTime;
                       let speed = {
-                        x: (1000/time)*(x - state.x)/60,
-                        y: (1000/time)*(y - state.y)/60
+                        x: (x - state.x)/((time/1000)*60),
+                        y: (y - state.y)/((time/1000)*60)
                       }
-                      add(Timer(time,callBack,() => {
+                      add(Timer(time,() => {
+                        state.x = x;
+                        state.y = y;
+                        if (callBack)
+                          callBack();
+                      },() => {
                         state.x += speed.x*deltaTime;
                         state.y += speed.y*deltaTime;
+                        if (speed.x > 0 && state.x > x || speed.x < 0 && state.x < x) {
+                          state.x = x;
+                        }
+                        if (speed.y > 0 && state.y > y || speed.y < 0 && state.y < y) {
+                          state.y = y;
+                        }
                       }));
                     },
                     kill: () => {
@@ -478,29 +492,36 @@
                       let newGroup;
                       if (state.members.length < 2)
                           return;
-                      /*Split the group, reposition and shuffle it*/
-                      if (enemy == true) {
-                          newGroup = pushGroup(state.x, state.y,true),12;
-                      } else {
-                          if (groups.length >= 4)
-                              return;
-                         newGroup = pushGroup(state.x, state.y),12;
-                      }
-                      newGroup.members = state.members.splice(state.members.length/2,state.members.length/2);
-                      newGroup.moveTo(state.x - 26, state.y,null,200);
-                      state.moveTo(state.x + 26,state.y, () => {
-                        shuffleGroup(state,12);
-                        shuffleGroup(newGroup,12);
-                        /* This code used to make splitting count as one action, now it does not*/
-                        /*state.actions -= 1;*/
-                        newGroup.actions = state.actions;
-                        /* Check player status */
-                        playerAction();
-                      },200);
-
+                      _tileSelector.start(state.x,state.y,1,(pos) => {
+                        /*Split the group, reposition and shuffle it*/
+                        if (enemy == true) {
+                            newGroup = pushGroup(state.x, state.y,true),12;
+                        } else {
+                            if (groups.length >= 4)
+                                return;
+                           newGroup = pushGroup(state.x, state.y),12;
+                        }
+                        newGroup.members = state.members.splice(state.members.length/2,state.members.length/2);
+                        state.moveTo(pos[0],pos[1], () => {
+                          shuffleGroup(state,12);
+                          shuffleGroup(newGroup,12);
+                          /* This code used to make splitting count as one action, now it does not*/
+                          /*state.actions -= 1;*/
+                          newGroup.actions = state.actions;
+                          /* Check player status */
+                          playerAction();
+                        },200);
+                      });
+                    },
+                    move: () => {
+                      _tileSelector.start(state.x,state.y,state.range,(pos) => {
+                        state.moveTo(pos[0],pos[1], () => {
+                          state.actions -= 1;
+                          playerAction();
+                        },200)
+                      });
                     },
                     enemyAction: (callback) => {
-                      console.log(state.actions);
                       /* This is the enemy AI
                           Priorities:
                           1) Move towards enemy
@@ -652,7 +673,7 @@
                                   state.group.split();
                               /* Move */
                               } else if (state.active == 1) {
-                                  movingGroup = group;
+                                  state.group.move();
                               /* Build */
                               } else if (state.active == 2) {
                                   add(BuildingMenu(state.group));
@@ -842,6 +863,81 @@
               return state;
             }
 
+            /* Tile select */
+            const TileSelect = () => {
+              let state = Object.assign(
+                GameObject(0,0),
+                {
+                  tiles: [],
+                  callBack: null,
+                  alphaSpeed: .01,
+                  start: (x,y,range,callBack) => {
+                    if (callBack) {
+                      state.callBack = callBack
+                    } else {
+                      state.callBack = null;
+                    }
+                    add(state);
+                    state.tiles = [];
+                    state.calculateTiles(x,y,range);
+                    state.tiles = uniq_fast(state.tiles);
+                    for (let i=0;i<state.tiles.length;i++) {
+                      if (state.tiles[i][0] == x && state.tiles[i][1] == y) {
+                        state.tiles.splice(i,1);
+                      }
+                    }
+                  },
+                  calculateTiles: (x,y,range) => {
+                    if (range == 0) {
+                      state.tiles.push([x,y]);
+                      return;
+                    }
+                    state.tiles.push([x,y]);
+                    state.calculateTiles(x-1,y,range-1);
+                    state.calculateTiles(x+1,y,range-1);
+                    state.calculateTiles(x,y+1,range-1);
+                    state.calculateTiles(x,y-1,range-1);
+                  },
+                  draw: () => {
+                    state.update();
+                    /* Fade effect */
+                    state.alpha += state.alphaSpeed*deltaTime;
+                    if (state.alpha < .4) {
+                      state.alpha = .4;
+                      state.alphaSpeed = -state.alphaSpeed;
+                    } else if (state.alpha > .8) {
+                      state.alpha = .8;
+                      state.alphaSpeed = -state.alphaSpeed;
+                    }
+                    for (let i=0;i<state.tiles.length;i++) {
+                      _ctx.beginPath();
+                      _ctx.strokeStyle = COLORS[3];
+                      _ctx.fillStyle = COLORS[2];
+                      _ctx.rect(state.tiles[i][0]*TILEWIDTH,state.tiles[i][1]*TILEHEIGHT+14,48,45);
+                      _ctx.globalAlpha = state.alpha;
+                      _ctx.fill();
+                      _ctx.globalAlpha = 1;
+                      _ctx.stroke();
+                    }
+                  },
+                  update: () => {
+                    if (mouse.click) {
+                      for (let i=0; i<state.tiles.length; i++) {
+                        if (mouse.x > state.tiles[i][0]*TILEWIDTH && mouse.x < state.tiles[i][0]*TILEWIDTH + TILEWIDTH && mouse.y > state.tiles[i][1]*TILEHEIGHT+14 && mouse.y < state.tiles[i][1]*TILEHEIGHT+14+TILEHEIGHT) {
+                          /* Player has clicked on a valid tile */
+                          remove(state);
+                          if (state.callBack)
+                            state.callBack(state.tiles[i]);
+                        }
+                      }
+                    }
+                  }
+                }
+              );
+
+              return state;
+            }
+
 
             function pushGroup(x,y,enemy) {
                 let newGroup = add(Group(x, y,enemy));
@@ -874,6 +970,7 @@
             }
             /*Game Start Code*/
             function gameStart() {
+                _tileSelector = TileSelect();
                 switchState(MENU_STATE);
                 bgDraw();
             }
@@ -906,11 +1003,11 @@
                 }, time: 20});
                 if (level == 1) {
                     /* Create player */
-                    shuffleGroup(createTroops(20,0,0,pushGroup(110,110)),12)
+                    shuffleGroup(createTroops(20,0,0,pushGroup(3,3)),12)
                     /* Create Enemies */
-                    shuffleGroup(createTroops(10,0,0,pushGroup(20,110,true)),12);
-                    shuffleGroup(createTroops(7,0,0,pushGroup(20,50,true)),12);
-                    shuffleGroup(createTroops(7,0,0,pushGroup(150,150,true)),12);
+                    shuffleGroup(createTroops(10,0,0,pushGroup(1,1,true)),12);
+                    shuffleGroup(createTroops(7,0,0,pushGroup(1,3,true)),12);
+                    shuffleGroup(createTroops(7,0,0,pushGroup(4,4,true)),12);
                 } else if (level == 2) {
                     shuffleGroup(createTroops(10,0,0,pushGroup(50,50)),12);
                     shuffleGroup(createTroops(10,0,0,pushGroup(200,200)),12);
@@ -961,7 +1058,7 @@
             /* Fun extra visual function (can be cut for more space) */
             function shuffleGroup(group,magnitude) {
                 for (let i=0;i<group.members.length;i++) {
-                    group.members[i].goto = [Math.random() * magnitude*2 - magnitude,Math.random() * magnitude*2 - magnitude]
+                    group.members[i].goto = [Math.random() * (magnitude*2) - magnitude,Math.random() * (magnitude*2) - magnitude]
                 }
                 return group;
             }
@@ -1003,6 +1100,22 @@
                 } while (error == true);
             }
 
+            /* return an array with all unique values */
+            function uniq_fast(a) {
+                let seen = {};
+                let out = [];
+                let len = a.length;
+                let j = 0;
+                for(let i = 0; i < len; i++) {
+                     let item = a[i];
+                     if(seen[item] !== 1) {
+                           seen[item] = 1;
+                           out[j++] = item;
+                     }
+                }
+                return out;
+            }
+
             function gameLoop() {
               requestAnimationFrame(gameLoop);
 
@@ -1039,25 +1152,12 @@
 
                 /*Game State specific stuff */
                 if (gameState == GAME_STATE) {
-                    /* Border around range */
-                    if (movingGroup != null) {
-                        _ctx.beginPath();
-                        for (let i=0;i<20;i++) {
-                            let startAngle = (Math.PI*2/20)*i + movingGroup.rangeAngle;
-                            let endAngle = startAngle + Math.PI*2/40
-                            _ctx.moveTo(movingGroup.range[0] + Math.cos(startAngle)*movingGroup.range[2],movingGroup.range[1] + Math.sin(startAngle)*movingGroup.range[2]);
-                            _ctx.arc(movingGroup.range[0],movingGroup.range[1],movingGroup.range[2],startAngle,endAngle);
-                        }
-                        _ctx.stroke();
-                        movingGroup.rangeAngle += (Math.PI / 100)*deltaTime;
-                    }
-
                     /* HUD */
                     if (bMActive == false) {
                         _ctx.fillStyle = COLORS[1];
                         _ctx.strokeStyle = COLORS[0];
                         _ctx.beginPath();
-                        _ctx.rect(-2,-2,244,16);
+                        _ctx.rect(-2,-2,244,15);
                         _ctx.fill();
                         _ctx.stroke();
                         _ctx.textAlign = "center";
@@ -1075,7 +1175,7 @@
                         }
                         _ctx.font = "bold 8px Arial";
                         _ctx.fillStyle = COLORS[3];
-                        _ctx.fillText(txt,120,10);
+                        _ctx.fillText(txt,120,9);
                         _ctx.textAlign = "left";
                     }
                 } else if (gameState == MENU_STATE) {
@@ -1128,32 +1228,7 @@
             }
 
             function gameUpdate() {
-                /* Move group if appropiate */
-                if (movingGroup != null) {
-                    distance = Math.sqrt(Math.pow((movingGroup.range[0] - mouse.x),2) + Math.pow((movingGroup.range[1] - mouse.y),2));
-                    if (distance < movingGroup.range[2]) {
-                        movingGroup.goto = [mouse.x - 8,mouse.y - 8];
-                    } else {
-                        let angle = Math.atan(((mouse.y - 8) - movingGroup.range[1])/((mouse.x - 8) - movingGroup.range[0]));
-
-                        let direction = [1,1];
-                        if ((mouse.x - 8) - movingGroup.range[0] < 0) {
-                            direction[0] = -1;
-                            direction[1] = -1;
-                        }
-
-
-                        movingGroup.goto = [movingGroup.range[0]-8 + Math.cos(angle)*movingGroup.range[2]*direction[0],movingGroup.range[1]-8 + Math.sin(angle)*movingGroup.range[2]*direction[1]];
-                    }
-                    /* Place player where moved to*/
-                    if (mouse.click) {
-                        movingGroup.actions -= 1;
-                        mouse.click = false;
-                        movingGroup = null;
-                        /* Check player's status */
-                        playerAction();
-                    }
-                }
+              
             }
 
             /* Call once to enable player actions */
@@ -1384,6 +1459,19 @@
                             _bgCtx.drawImage(graphics,0,16,16,16,c*16,r*16,16,16);
                         }
                     }
+                    /* Draw grid */
+                    /*for (let i = 0; i < 6; i++) {
+                      _bgCtx.beginPath();
+                      _bgCtx.moveTo(i*TILEWIDTH,0);
+                      _bgCtx.lineTo(i*TILEWIDTH,HEIGHT/2);
+                      _bgCtx.stroke();
+                    }
+                    for (let i = 0; i < 6; i++) {
+                      _bgCtx.beginPath();
+                      _bgCtx.moveTo(0,i*TILEHEIGHT + 14);
+                      _bgCtx.lineTo(WIDTH/2,i*TILEHEIGHT + 14);
+                      _bgCtx.stroke();
+                    }*/
                 } else if (gameState == MENU_STATE) {
                     /* Title Menu */
                     /* Background */
