@@ -279,8 +279,12 @@
                                   mouse.click = false;
                                   group.actions -= 1;
                                   /* Not to be confused with state.dummyBuildings (this is the global array) */
-                                  buildings.push(add(Building(group.x - 8,group.y,state.dummyBuildings[i].type)));
-                                  group.goto = [group.x,group.y + 46];
+                                  let buildingType = state.dummyBuildings[i].type;
+                                  _tileSelector.start(group.x,group.y,1,(pos) => {
+                                    buildings.push(add(Building(pos[0]*TILEWIDTH+8,pos[1]*TILEHEIGHT + 21.25,buildingType)));
+                                    //Check player status
+                                    playerAction();
+                                  });
                                   state.close();
                               }
                           }
@@ -288,6 +292,7 @@
                       /* Close menu if click on back button */
                       if (mouse.x > 14 && mouse.x < 30 && mouse.y > 10 && mouse.y < 26 && mouse.click) {
                           state.close();
+                          playerAction();
                       }
                     },
                     close: () => {
@@ -296,8 +301,6 @@
                       }
                       remove(state);
                       bMActive = false;
-                      /* Check player status */
-                      playerAction();
                     },
                   }
                 );
@@ -396,7 +399,7 @@
                               if (attackGroup != null) {
                                   /* Initiate attack */
                                   let distance = Math.sqrt(Math.pow((state.x - attackGroup.x),2)+Math.pow((state.y - attackGroup.y),2));
-                                  if (distance < 48) {
+                                  if (distance <= 1) {
                                       /* Keep the attacker local, remove global attacker */
                                       let attacker = attackGroup;
                                       attackGroup = null;
@@ -501,13 +504,13 @@
                                 return;
                            newGroup = pushGroup(state.x, state.y),12;
                         }
+                        newGroup.actions = state.actions;
                         newGroup.members = state.members.splice(state.members.length/2,state.members.length/2);
                         state.moveTo(pos[0],pos[1], () => {
                           shuffleGroup(state,12);
                           shuffleGroup(newGroup,12);
                           /* This code used to make splitting count as one action, now it does not*/
                           /*state.actions -= 1;*/
-                          newGroup.actions = state.actions;
                           /* Check player status */
                           playerAction();
                         },200);
@@ -715,7 +718,7 @@
                     if (distances[i-1] && distances[i] < distances[i-1])
                         target = i;
                 }
-                if (distances[target] > 48) {
+                if (distances[target] > 1) {
                     state.inactive[3] = 1;
                 }
                 /* Disable split if there are more than four groups*/
@@ -1228,7 +1231,7 @@
             }
 
             function gameUpdate() {
-              
+
             }
 
             /* Call once to enable player actions */
@@ -1316,7 +1319,7 @@
                     whichEnemy = 0;
                     turnSwitch(true);
                 });
-              },/* Offset */{x:-7,y: -7});
+              },/* Offset */{x:-enemyGroups[whichEnemy].x + (enemyGroups[whichEnemy].x*TILEWIDTH+9),y: -enemyGroups[whichEnemy].y + (enemyGroups[whichEnemy].y*TILEHEIGHT+22)});
             }
 
             /* Update logic for the main menu */
