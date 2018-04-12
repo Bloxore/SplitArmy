@@ -44,6 +44,8 @@
         <div id="f"></div>
         <div id="game"></div>
     </body>
+    <!-- Import external code !-->
+    <script src="astar.js"></script>
     <!--Javascript code starts here !-->
     <script>
     	/* Engine Constants */
@@ -111,6 +113,7 @@
             let currentBuilding = 0;
             let enablePlayer;
             let _tileSelector;
+            let _tileLayout = [];
 
             /* Objects */
             const GameObject = (x,y) => {
@@ -178,6 +181,7 @@
                     mpBuild: 10,
                     zIndex: 1,
                     type,
+                    tile: [],
                     draw: () => {
                       if (state.type = "t") {
                           _ctx.drawImage(graphics,16,16,32,16,state.x,state.y,32,16);
@@ -281,7 +285,9 @@
                                   /* Not to be confused with state.dummyBuildings (this is the global array) */
                                   let buildingType = state.dummyBuildings[i].type;
                                   _tileSelector.start(group.x,group.y,1,(pos) => {
-                                    buildings.push(add(Building(pos[0]*TILEWIDTH+8,pos[1]*TILEHEIGHT + 21.25,buildingType)));
+                                    let localBuilding = add(Building(pos[0]*TILEWIDTH+8,pos[1]*TILEHEIGHT + 21.25,buildingType));
+                                    localBuilding.tile = pos;
+                                    buildings.push(localBuilding);
                                     //Check player status
                                     playerAction();
                                   });
@@ -538,44 +544,45 @@
                       */
                       /* Determine what to advance on */
                       let distances = [];
-                      let target = 0;
-                      for (let i=0; i < groups.length; i++) {
-                          distances[i] = Math.sqrt(Math.pow(groups[i].x - state.x,2)+Math.pow(groups[i].y - state.y,2));
-                          if (distances[i-1] && distances[i] < distances[i-1])
-                              target = i;
+                      let target = null;
+                      calculateTileLayout();
+                      let path = [];
+                      let blackList = [];
+                      while (path.length == 0) {
+                        target = null;
+                        for (let i=0; i < groups.length; i++) {
+                            distances[i] = Math.sqrt(Math.pow(groups[i].x - state.x,2)+Math.pow(groups[i].y - state.y,2));
+                            if (distances[i-1] && distances[i] < distances[i-1]) {
+                                target = i;
+                            } else if (distances[i-1] == undefined) {
+                                target = 0;
+                            }
+                        }
+                        path = pathFind(state.x,state.y,groups[target].x - 1,groups[target].y);
+                        if (path.length == 0)
+                          path = pathFind(state.x,state.y,groups[target].x + 1,groups[target].y);
+                          if (path.length == 0)
+                            path = pathFind(state.x,state.y,groups[target].x,groups[target].y + 1);
+                            if (path.length == 0)
+                              path = pathFind(state.x,state.y,groups[target].x,groups[target].y - 1);
                       }
                       /* Make sure target is worth going for and that the enemy can even still move*/
-                      if (Math.floor(distances[target]) > 42 && state.actions > 0) {
-                          if (distances[target] > state.range[2] && distances[target] - state.range[2] > 42) {
-                              let ratio = state.range[2] / distances[target];
-                              state.moveTo(
-                                (groups[target].x - state.x)*ratio + state.x,
-                                (groups[target].y - state.y)*ratio + state.y,
-                                () => {
-                                  state.actions -= 1;
-                                  state.enemyAction(callback);
-                                }
-                              );
-                              return;
-                          } else {
-                              let direction = [groups[target].x - state.x,groups[target].y - state.y];
-                              direction = [-Math.abs(direction[0])/direction[0],-Math.abs(direction[1])/direction[1]];
-                              if (isNaN(direction[0]))
-                                  direction[0] = 0;
-                              if (isNaN(direction[1]))
-                                  direction[1] = 0;
-
-                              let angle = Math.atan(-(state.y - groups[target].y) / (state.x - groups[target].x));
-                              state.moveTo(
-                                groups[target].x + Math.abs(42*Math.cos(angle))*direction[0],
-                                groups[target].y + Math.abs(42*Math.sin(angle))*direction[1],
-                                () => {
-                                  state.actions -= 1;
-                                  state.enemyAction(callback);
-                                }
-                              );
-                              return;
+                      if (target != null && Math.floor(distances[target]) > 1 && state.actions > 0) {
+                          let range = state.range;
+                          let tileMovement = (i) => {
+                            if (range > 0) {
+                              state.moveTo(path[i].x,path[i].y, () => {
+                                range--;
+                                tileMovement(i + 1);
+                              });
+                            } else {
+                              console.log("hello");
+                              state.actions -= 1;
+                              state.enemyAction(callback);
+                            }
                           }
+                          tileMovement(0);
+                          return;
                       }
 
                       /* Priority 2
@@ -724,6 +731,13 @@
                 /* Disable split if there are more than four groups*/
                 if (groups.length >= 4)
                     state.inactive[0] = 1;
+                /* Disable move,split, and build if group is blocked off */
+                calculateTileLayout();
+                if (_tileLayout[group.x][group.y+1] !== 1 && _tileLayout[group.x][group.y-1] !== 1 && _tileLayout[group.x+1][group.y] !== 1 && _tileLayout[group.x-1][group.y] !== 1) {
+                    state.inactive[1] = 1;
+                    state.inactive[0] = 1;
+                    state.inactive[2] = 1;
+                }
 
                 return state;
             };
@@ -884,9 +898,15 @@
                     state.tiles = [];
                     state.calculateTiles(x,y,range);
                     state.tiles = uniq_fast(state.tiles);
+                    /* Check the layout of the grid */
+                    calculateTileLayout();
                     for (let i=0;i<state.tiles.length;i++) {
-                      if (state.tiles[i][0] == x && state.tiles[i][1] == y) {
+                      if (state.tiles[i][0] > 4 || state.tiles[i][1] > 4) {
                         state.tiles.splice(i,1);
+                        i--;
+                      } else if (_tileLayout[state.tiles[i][0]][state.tiles[i][1]] != 1) {
+                        state.tiles.splice(i,1);
+                        i--;
                       }
                     }
                   },
@@ -991,6 +1011,7 @@
                 bMActive = false;
                 enablePlayer = false;
                 _canvas.style.cursor = "default";
+                _tileLayout = [];
                 gameState = newState;
             }
 
@@ -1036,6 +1057,7 @@
                         if (groups[i])
                           groups[i].actions = 2;
                     }
+                    calculateTileLayout();
                 } else {
                     whichEnemy = 0;
                     turn = "enemy";
@@ -1070,6 +1092,31 @@
             function targetSprite(obj, time, callBack, offset) {
               if (obj.x && obj.y)
                 add(Target(obj,time,callBack, offset));
+            }
+
+            function calculateTileLayout() {
+              for (let i = 0; i < 5; i++) {
+                _tileLayout[i] = [];
+                for (let j = 0; j < 5; j++) {
+                  _tileLayout[i][j] = 1;
+                }
+              }
+              for (let i = 0; i < groups.length; i++) {
+                _tileLayout[groups[i].x][groups[i].y] = 0;
+              }
+              for (let i = 0; i < enemyGroups.length; i++) {
+                _tileLayout[enemyGroups[i].x][enemyGroups[i].y] = 0;
+              }
+              for (let i = 0; i < buildings.length; i++) {
+                _tileLayout[buildings[i].tile[0]][buildings[i].tile[1]] = 0;
+              }
+            }
+
+            function pathFind(x1,y1,x2,y2) {
+              let graph = new Graph(_tileLayout);
+            	let start = graph.grid[x1][y1];
+            	let end = graph.grid[x2][y2];
+            	return astar.search(graph, start, end);
             }
 
             function sortObjects() {
