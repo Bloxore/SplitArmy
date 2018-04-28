@@ -536,7 +536,6 @@
                           1) Move towards enemy
                           2) Attack when in range
                       */
-
                       /* Priority 1:
                       Move enemy towards player
                       Determine closest player and move maximum range towards it. Move just close enough to attack
@@ -567,7 +566,7 @@
                               path = pathFind(state.x,state.y,groups[target].x,groups[target].y - 1);
                       }
                       /* Make sure target is worth going for and that the enemy can even still move*/
-                      if (target != null && Math.floor(distances[target]) > 1 && state.actions > 0) {
+                      if (target != null && distances[target] > 1 && state.actions > 0) {
                           let range = state.range;
                           let tileMovement = (i) => {
                             if (range > 0) {
@@ -576,7 +575,6 @@
                                 tileMovement(i + 1);
                               });
                             } else {
-                              console.log("hello");
                               state.actions -= 1;
                               state.enemyAction(callback);
                             }
