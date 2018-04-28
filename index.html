@@ -46,6 +46,7 @@
     </body>
     <!-- Import external code !-->
     <script src="astar.js"></script>
+    <script src="levelData.js"></script>
     <!--Javascript code starts here !-->
     <script>
     	/* Engine Constants */
@@ -547,7 +548,7 @@
                       calculateTileLayout();
                       let path = [];
                       let blackList = [];
-                      while (path.length == 0) {
+                      while (path.length == 0 && groups.length > 0) {
                         target = null;
                         for (let i=0; i < groups.length; i++) {
                             distances[i] = Math.sqrt(Math.pow(groups[i].x - state.x,2)+Math.pow(groups[i].y - state.y,2));
@@ -1023,19 +1024,19 @@
                     if (gameState == GAME_STATE)
                         turnSwitch(true);
                 }, time: 20});
-                if (level == 1) {
+                if (level == 0) {
                     /* Create player */
                     shuffleGroup(createTroops(20,0,0,pushGroup(3,3)),12)
                     /* Create Enemies */
                     shuffleGroup(createTroops(10,0,0,pushGroup(1,1,true)),12);
                     shuffleGroup(createTroops(7,0,0,pushGroup(1,3,true)),12);
                     shuffleGroup(createTroops(7,0,0,pushGroup(4,4,true)),12);
-                } else if (level == 2) {
+                } else if (level == 1) {
                     shuffleGroup(createTroops(10,0,0,pushGroup(50,50)),12);
                     shuffleGroup(createTroops(10,0,0,pushGroup(200,200)),12);
                     shuffleGroup(createTroops(5,0,0,pushGroup(110,110,true)),12);
                     shuffleGroup(createTroops(15,0,0,pushGroup(300,300,true)),12);
-                } else if (level == 3) {
+                } else if (level == 2) {
                     //Players
                     shuffleGroup(createTroops(50,0,0,pushGroup(100,50)),12);
                     //Enemies
@@ -1373,7 +1374,7 @@
                 if (mouse.x > 165 -52 && mouse.x < 165+52 && mouse.y > 168 && mouse.y < 202) {
                     _canvas.style.cursor = "pointer";
                     if (mouse.click && !fx.type) {
-                        level = 1;
+                        level = 0;
                         startFX(CIRCLE_TRANSITION,{complete: beginLevel});
                         _canvas.style.cursor = "default";
                     }
@@ -1504,7 +1505,12 @@
                     /*Background*/
                     for (var r=0;r<240/16;r++) {
                         for (var c=0;c<240/16;c++) {
-                            _bgCtx.drawImage(graphics,0,16,16,16,c*16,r*16,16,16);
+                            if (levelData[level][r][c] == 0) {
+                                _bgCtx.drawImage(graphics,0,16,16,16,c*16,r*16,16,16);
+                            }
+                            else if (levelData[level][r][c] == 1) {
+                                _bgCtx.drawImage(graphics,16*3,16*2,16,16,c*16,r*16,16,16);
+                            }
                         }
                     }
                     /* Draw grid */
@@ -1719,4 +1725,4 @@ darkagent for players and enemies
 lospec.com
 Kirokaze for Pallet
 !-->
-<img id="g" src="data:image/png;base64,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" alt="" />
+<img id="g" src="data:image/png;base64,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" alt="" />
