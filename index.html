@@ -174,7 +174,7 @@
             Make more guys building
             Wall to stall for time
             */
-            const Building = (x,y,type) => {
+            const Building = (x,y,type, display) => {
                 /* Combine objects */
                 let state = Object.assign(
                   GameObject(x,y),
@@ -184,18 +184,29 @@
                     type,
                     tile: [],
                     draw: () => {
+                      // Put into display mode
+                      if (display == true) {
+                        state.x = (state.x-8) / TILEWIDTH;
+                        state.y = (state.y-21.25) / TILEHEIGHT;
+                      }
                       if (state.type = "t") {
-                          _ctx.drawImage(graphics,16,16,32,16,state.x,state.y,32,16);
-                          _ctx.drawImage(graphics,48,16,32,16,state.x,state.y+16,32,16);
+                          _ctx.drawImage(graphics,16,16,32,16,state.x*TILEWIDTH+8,state.y*TILEHEIGHT + 21.25,32,16);
+                          _ctx.drawImage(graphics,48,16,32,16,state.x*TILEWIDTH+8,state.y*TILEHEIGHT + 21.25+16,32,16);
                           state.mpBuild = 10;
+                      }
+                      // Revert back to normal
+                      if (display == true) {
+                        state.x = state.x * TILEWIDTH + 8;
+                        state.y = state.y * TILEHEIGHT + 21.25;
                       }
                     },
                     action: () => {
+                      console.log(state.x,state.y)
                       targetSprite(state,1000,() => {
                         if (state.type == "t") {
-                          let range = 30;
+                          let range = 2;
                           for (let i=0; i < enemyGroups.length; i++) {
-                              if (Math.sqrt(Math.pow(enemyGroups[i].x - state.x,2)+Math.pow(enemyGroups[i].y - state.y,2)) < range) {
+                              if (Math.sqrt(Math.pow(enemyGroups[i].x - state.x,2)+Math.pow(enemyGroups[i].y - state.y,2)) <= range) {
                                   enemyGroups[i].members.splice(0,Math.ceil(enemyGroups[i].members.length/10));
                               }
                           }
@@ -286,7 +297,7 @@
                                   /* Not to be confused with state.dummyBuildings (this is the global array) */
                                   let buildingType = state.dummyBuildings[i].type;
                                   _tileSelector.start(group.x,group.y,1,(pos) => {
-                                    let localBuilding = add(Building(pos[0]*TILEWIDTH+8,pos[1]*TILEHEIGHT + 21.25,buildingType));
+                                    let localBuilding = add(Building(pos[0],pos[1],buildingType));
                                     localBuilding.tile = pos;
                                     buildings.push(localBuilding);
                                     //Check player status
@@ -314,7 +325,7 @@
 
                 /* Add building sprites to dummyBuildings array */
                 for (let i=0;i<items.length;i++) {
-                    state.dummyBuildings.push(add(Building(20+55*(i%4),90*(Math.floor(i/4)+1) - 50,items[i])));
+                  state.dummyBuildings.push(add(Building(20+55*(i%4),90*(Math.floor(i/4)+1) - 50,items[i],true)));
                 }
 
                 return state;
@@ -747,7 +758,7 @@
                     state.inactive[0] = 1;
                 /* Disable move,split, and build if group is blocked off */
                 calculateTileLayout();
-                if (_tileLayout[group.x][group.y+1] !== 1 && _tileLayout[group.x][group.y-1] !== 1 && _tileLayout[group.x+1][group.y] !== 1 && _tileLayout[group.x-1][group.y] !== 1) {
+                if (tileCheck(group.x,group.y+1) !== 1 && tileCheck(group.x,group.y-1) !== 1 && tileCheck(group.x+1,group.y) !== 1 && tileCheck(group.x-1,group.y) !== 1) {
                     state.inactive[1] = 1;
                     state.inactive[0] = 1;
                     state.inactive[2] = 1;
@@ -858,10 +869,10 @@
                   draw: () => {
                     _ctx.globalAlpha = state.alpha;
                     /* Draw target around sprite */
-                    _ctx.drawImage(graphics,16*6,16,16,16,sprite.x - 8 + state.offset.x,sprite.y - 8 + state.offset.y,16,16);
-                    _ctx.drawImage(graphics,0,16*2,16,16,sprite.x + 22 + state.offset.x,sprite.y - 8 + state.offset.y,16,16);
-                    _ctx.drawImage(graphics,16,16*2,16,16,sprite.x + 22 + state.offset.x,sprite.y + 22 + state.offset.y,16,16);
-                    _ctx.drawImage(graphics,16*2,16*2,16,16,sprite.x - 8 + state.offset.x,sprite.y + 22 + state.offset.y,16,16);
+                    _ctx.drawImage(graphics,16*6,16,16,16,sprite.x*TILEWIDTH + 1 + state.offset.x,sprite.y*TILEHEIGHT + 14 + state.offset.y,16,16);
+                    _ctx.drawImage(graphics,0,16*2,16,16,sprite.x*TILEWIDTH + 31 + state.offset.x,sprite.y*TILEHEIGHT + 14 + state.offset.y,16,16);
+                    _ctx.drawImage(graphics,16,16*2,16,16,sprite.x*TILEWIDTH + 31 + state.offset.x,sprite.y*TILEHEIGHT + 44 + state.offset.y,16,16);
+                    _ctx.drawImage(graphics,16*2,16*2,16,16,sprite.x*TILEWIDTH + 1 + state.offset.x,sprite.y*TILEHEIGHT + 44 + state.offset.y,16,16);
 
                     _ctx.globalAlpha = 1;
                   },
@@ -1106,6 +1117,15 @@
             /* Visual flare to indicate that sprite is active */
             function targetSprite(obj, time, callBack, offset) {
               add(Target(obj,time,callBack, offset));
+            }
+
+            /*Return the value of a tile space */
+            function tileCheck(x,y) {
+              if (x >= 0 && x < 5 && y >= 0 && y < 5) {
+                  return _tileLayout[x][y];
+              } else {
+                  return null;
+              }
             }
 
             function calculateTileLayout() {
@@ -1380,7 +1400,7 @@
                     whichEnemy = 0;
                     turnSwitch(true);
                 });
-              },/* Offset */{x:-enemyGroups[whichEnemy].x + (enemyGroups[whichEnemy].x*TILEWIDTH+9),y: -enemyGroups[whichEnemy].y + (enemyGroups[whichEnemy].y*TILEHEIGHT+22)});
+              });
             }
 
             /* Update logic for the main menu */
