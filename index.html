@@ -107,7 +107,7 @@
             let movingGroup;
             let message;
             let buildings;
-            let bMActive;
+            let menuActive;
             let turn;
             let attackGroup;
             let gameState;
@@ -234,6 +234,39 @@
                 return state;
             };
 
+            const SplitSelector = (group, callBack) => {
+              menuActive = true;
+              let state = Object.assign(
+                GameObject(0,0),
+                {
+                  ammountToSplit: group.members.length,
+                  zIndex: 100,
+                  _width: WIDTH,
+                  _height: 0,
+                  active: false,
+                  draw: () => {
+                    state.update();
+                    _ctx.fillStyle = COLORS[2];
+                    _ctx.rect(0, HEIGHT / 4 - state._height / 2, state._width, state._height);
+                    _ctx.fill();
+                  },
+                  update: () => {
+                    if (groups.length > 1) {
+                      state.zIndex = 0;
+                      remove(state);
+                      callBack(group);
+                    }
+                  }
+                }
+              );
+              add(Timer(250,() => {
+                state._height = 200;
+              }, () => {
+                state._height += (200/15)*deltaTime;
+              }))
+              return state;
+            }
+
             const BuildingMenu = (group) => {
               /* Menu's variables */
                 let items = ["t","t","t","t","t","t"];
@@ -288,7 +321,7 @@
                       }
                     },
                     update: () => {
-                      bMActive = true;
+                      menuActive = true;
                       /* Check mouse position around each time and draw
                       a rectangle around it if selected */
                       state.hover = null;
@@ -324,7 +357,7 @@
                           remove(state.dummyBuildings[i]);
                       }
                       remove(state);
-                      bMActive = false;
+                      menuActive = false;
                     },
                   }
                 );
@@ -404,7 +437,7 @@
                       if (mouse.click == true && mouse.x > state.x*TILEWIDTH && mouse.x < state.x*TILEWIDTH + 48 && mouse.y > state.y*TILEWIDTH && mouse.y < state.y*TILEWIDTH + 45) {
                           if (enemy != true) {
                               /* Create action command list; only if player is enabled*/
-                              if (enablePlayer == true && state.list == null && movingGroup == null && state.actions > 0 && message == false && bMActive == false && attackGroup == null && !fx.type) {
+                              if (enablePlayer == true && state.list == null && movingGroup == null && state.actions > 0 && message == false && menuActive == false && attackGroup == null && !fx.type && _tileSelector.open == false) {
                                   /* Delete all other group's lists, but be sure the group exists first.*/
                                   for (let i=0;i<groups.length;i++) {
                                       if (groups[i].list != null && groups[i].list.active == -1) {
@@ -416,47 +449,9 @@
                                   }
                                   /* Disable click */
                                   mouse.click = false;
-                                  state.list = add(List(mouse.x - 5,mouse.y - 5,state));
-                              }
-                          } else {
-                              /* For enemy groups only */
-                              if (attackGroup != null) {
-                                  /* Initiate attack */
-                                  let distance = Math.sqrt(Math.pow((state.x - attackGroup.x),2)+Math.pow((state.y - attackGroup.y),2));
-                                  if (distance <= 1) {
-                                      /* Keep the attacker local, remove global attacker */
-                                      let attacker = attackGroup;
-                                      attackGroup = null;
-
-                                      enemyLength = state.members.length;
-                                      state.members.splice(0,attacker.members.length);
-                                      attacker.actions -= 1;
-                                      /* Attacking group also takes loses */
-                                      attacker.members.splice(0,enemyLength/2);
-                                      shuffleGroup(attacker,12);
-                                      shuffleGroup(state,12);
-                                      /* Delete dead groups */
-                                      if (state.members.length < 1){
-                                          state.fade(200,0,() => {
-                                            state.kill();
-                                          });
-                                      }
-                                      if (attacker.members.length < 1){
-                                          attacker.fade(200,0,() => {
-                                            attacker.kill();
-                                          });
-                                      }
-                                      /* If either group needs to be faded start a timer */
-                                      if (attacker.members.length < 1 || state.members.length < 1) {
-                                        add(Timer(300,() => {
-                                          /* Check player status */
-                                          playerAction();
-                                        }));
-                                      } else {
-                                        /* Check player status */
-                                        playerAction();
-                                      }
-                                  }
+                                  //Old Code, used to bring up list
+                                  //state.list = add(List(mouse.x - 5,mouse.y - 5,state));
+                                  state.move();
                               }
                           }
                       }
@@ -475,6 +470,41 @@
                               state.goto = [state.x,220];
                           else if (state.y < 0)
                               state.goto = [state.x,20];
+                      }
+                    },
+                    attack: (attacker) => {
+                      enemyLength = state.members.length;
+                      state.members.splice(0,attacker.members.length);
+                      attacker.actions -= 1;
+                      /* Attacking group also takes loses */
+                      attacker.members.splice(0,enemyLength/2);
+                      shuffleGroup(attacker,12);
+                      shuffleGroup(state,12);
+                      /* Delete dead groups */
+                      if (state.members.length < 1){
+                          state.fade(200,0,() => {
+                            state.kill();
+                          });
+                      }
+                      if (attacker.members.length < 1){
+                          attacker.fade(200,0,() => {
+                            attacker.kill();
+                          });
+                      }
+                      //If both parties survived, allow the player to move away.
+                      if (state.members.length > 1 && attacker.members.length > 1) {
+                          //Indicate the player needs to move away.
+                          return true;
+                      }
+                      /* If either group needs to be faded start a timer */
+                      if (attacker.members.length < 1 || state.members.length < 1) {
+                        add(Timer(300,() => {
+                          /* Check player status */
+                          playerAction();
+                        }));
+                      } else {
+                        /* Check player status */
+                        playerAction();
                       }
                     },
                     moveTo: (x,y,callBack,customTime) => {
@@ -515,21 +545,21 @@
                               }
                           }
                     },
-                    split: () => {
+                    split: (ammount) => {
                       let newGroup;
                       if (state.members.length < 2)
                           return;
                       _tileSelector.start(state.x,state.y,1,(pos) => {
                         /*Split the group, reposition and shuffle it*/
                         if (enemy == true) {
-                            newGroup = pushGroup(state.x, state.y,true),12;
+                            newGroup = pushGroup(state.x, state.y,true);
                         } else {
                             if (groups.length >= 4)
                                 return;
-                           newGroup = pushGroup(state.x, state.y),12;
+                           newGroup = pushGroup(state.x, state.y);
                         }
                         newGroup.actions = state.actions;
-                        newGroup.members = state.members.splice(state.members.length/2,state.members.length/2);
+                        newGroup.members = state.members.splice(ammount,ammount);
                         newGroup.moveTo(pos[0],pos[1], () => {
                           shuffleGroup(state,12);
                           shuffleGroup(newGroup,12);
@@ -540,13 +570,39 @@
                         },200);
                       });
                     },
-                    move: () => {
-                      _tileSelector.start(state.x,state.y,state.range,(pos) => {
-                        state.moveTo(pos[0],pos[1], () => {
-                          state.actions -= 1;
-                          playerAction();
-                        },200)
-                      });
+                    move: (range) => {
+                      let limit = state;
+                      let moveAgain = false;
+                      //If no custom range is given use default, if a custom range is given, limit the movement.
+                      if (range == null) {
+                        range = state.range;
+                      } else {
+                        limit = null;
+                      }
+                      _tileSelector.start(state.x,state.y,range,(pos) => {
+                        add(SplitSelector(state,(actionGroup) => {
+                          //Check if enemy exists in position
+                          for (let e=0; e < enemyGroups.length; e++) {
+                            if (pos[0] == enemyGroups[e].x && pos[1] == enemyGroups[e].y) {
+                              moveAgain = enemyGroups[e].attack(actionGroup);
+                            }
+                          }
+                          //Check if selected self then rest
+                          if (pos[0] == actionGroup.x && pos[1] == actionGroup.y) {
+                            actionGroup.actions = 0;
+                            playerAction();
+                          } else {
+                            actionGroup.moveTo(pos[0],pos[1], () => {
+                              if (moveAgain) {
+                                actionGroup.move(1);
+                              } else {
+                                actionGroup.actions -= 1;
+                                playerAction();
+                              }
+                            },200)
+                          }
+                        }));
+                      }, limit);
                     },
                     enemyAction: (callback) => {
                       /* This is the enemy AI
@@ -670,7 +726,7 @@
                   GameObject(x,y),
                   {
                     zIndex: 99,
-                    items: ["Split","Move","Build","Attack","Rest"],
+                    items: ["Split","Rest"],
                     active: null,
                     group,
                     inactive: [0,0,0,0,0],
@@ -683,7 +739,7 @@
                       if (state.active != -1 && state.inactive[state.active] == 0) {
                           _ctx.beginPath();
                           _ctx.fillStyle = COLORS[1];
-                          _ctx.rect(state.x,state.y + state.active*(70/5),50,70/5);
+                          _ctx.rect(state.x,state.y + state.active*(70/state.items.length),50,70/state.items.length);
                           _ctx.fill();
                       }
                       _ctx.fillStyle = COLORS[3];
@@ -692,7 +748,7 @@
                           if (state.inactive[i] == 1) {
                              _ctx.fillStyle = COLORS[1];
                           }
-                          _ctx.fillText(state.items[i],state.x + 2,state.y + (70/5) * i + 11);
+                          _ctx.fillText(state.items[i],state.x + 2,state.y + (70/state.items.length) * i + 11);
                           if (state.inactive[i] == 1) {
                              _ctx.fillStyle = COLORS[3];
                           }
@@ -700,7 +756,7 @@
                     },
                     update: () => {
                       if (mouse.x > state.x && mouse.x < state.x + 50 && mouse.y > state.y && mouse.y < state.y + 70) {
-                          state.active = Math.floor((mouse.y - state.y) / (70/5));
+                          state.active = Math.floor((mouse.y - state.y) / (70/state.items.length));
                       } else {
                           state.active = -1;
                       }
@@ -711,18 +767,24 @@
                               enablePlayer = false;
                               /* Split */
                               if (state.active == 0) {
-                                  state.group.split();
-                              /* Move */
+                                  if (groups.length == 1) {
+                                    state.group.split();
+                                  } else {
+                                    state.group.join();
+                                  }
+                              /* Move
                               } else if (state.active == 1) {
                                   state.group.move();
+                              }
                               /* Build */
-                              } else if (state.active == 2) {
+                            /* else if (state.active == 2) {
                                   add(BuildingMenu(state.group));
-                              /* Attack */
-                              } else if (state.active == 3) {
+                              }
+                              /* Attack
+                              else if (state.active == 2) {
                                   attackGroup = group;
                               /* Rest */
-                              } else if (state.active == 4) {
+                            } else if (state.active == 1) {
                                   state.group.actions = 0;
                                   /* Check player status */
                                   playerAction();
@@ -761,15 +823,15 @@
                 if (distance > 1) {
                     state.inactive[3] = 1;
                 }
-                /* Disable split if there are more than four groups*/
-                if (groups.length >= 4)
-                    state.inactive[0] = 1;
+                /* Change split to rejoin */
+                if (groups.length > 1)
+                    state.items[0] = "Join";
                 /* Disable move,split, and build if group is blocked off */
                 calculateTileLayout();
                 if (tileCheck(group.x,group.y+1) !== 1 && tileCheck(group.x,group.y-1) !== 1 && tileCheck(group.x+1,group.y) !== 1 && tileCheck(group.x-1,group.y) !== 1) {
-                    state.inactive[1] = 1;
                     state.inactive[0] = 1;
-                    state.inactive[2] = 1;
+                    /*state.inactive[1] = 1;
+                    state.inactive[2] = 1;*/
                 }
 
                 return state;
@@ -921,7 +983,9 @@
                   tiles: [],
                   callBack: null,
                   alphaSpeed: .01,
-                  start: (x,y,range,callBack) => {
+                  open: false,
+                  start: (x,y,range,callBack,player) => {
+                    state.open = true;
                     if (callBack) {
                       state.callBack = callBack;
                     } else {
@@ -932,7 +996,7 @@
                     state.calculateTiles(x,y,range);
                     state.tiles = uniq_fast(state.tiles);
                     /* Check the layout of the grid */
-                    calculateTileLayout();
+                    calculateTileLayout(player);
                     for (let i=0;i<state.tiles.length;i++) {
                       if (state.tiles[i][0] > 4 || state.tiles[i][1] > 4) {
                         state.tiles.splice(i,1);
@@ -982,6 +1046,8 @@
                         if (mouse.x > state.tiles[i][0]*TILEWIDTH && mouse.x < state.tiles[i][0]*TILEWIDTH + TILEWIDTH && mouse.y > state.tiles[i][1]*TILEHEIGHT+14 && mouse.y < state.tiles[i][1]*TILEHEIGHT+14+TILEHEIGHT) {
                           /* Player has clicked on a valid tile */
                           remove(state);
+                          state.open = false;
+                          mouse.click = false;
                           if (state.callBack)
                             state.callBack(state.tiles[i]);
                         }
@@ -1042,7 +1108,7 @@
                 targetedSprite = null;
                 message = false;
                 buildings = [];
-                bMActive = false;
+                menuActive = false;
                 enablePlayer = false;
                 _canvas.style.cursor = "default";
                 _tileLayout = [];
@@ -1136,7 +1202,7 @@
               }
             }
 
-            function calculateTileLayout() {
+            function calculateTileLayout(player) {
               for (let i = 0; i < 5; i++) {
                 _tileLayout[i] = [];
                 for (let j = 0; j < 5; j++) {
@@ -1144,10 +1210,18 @@
                 }
               }
               for (let i = 0; i < groups.length; i++) {
-                _tileLayout[groups[i].x][groups[i].y] = 0;
+                if (player) {
+                  _tileLayout[groups[i].x][groups[i].y] = 1;
+                } else {
+                  _tileLayout[groups[i].x][groups[i].y] = 0;
+                }
               }
               for (let i = 0; i < enemyGroups.length; i++) {
-                _tileLayout[enemyGroups[i].x][enemyGroups[i].y] = 0;
+                if (player && player.actions > 1) {
+                  _tileLayout[enemyGroups[i].x][enemyGroups[i].y] = 1;
+                } else {
+                  _tileLayout[enemyGroups[i].x][enemyGroups[i].y] = 0;
+                }
               }
               for (let i = 0; i < buildings.length; i++) {
                 _tileLayout[buildings[i].tile[0]][buildings[i].tile[1]] = 0;
@@ -1255,31 +1329,29 @@
                 /*Game State specific stuff */
                 if (gameState == GAME_STATE) {
                     /* HUD */
-                    if (bMActive == false) {
-                        _ctx.fillStyle = COLORS[1];
-                        _ctx.strokeStyle = COLORS[0];
-                        _ctx.beginPath();
-                        _ctx.rect(-2,-2,244,15);
-                        _ctx.fill();
-                        _ctx.stroke();
-                        _ctx.textAlign = "center";
-                        let txt;
-                        if (movingGroup != null) {
-                            txt = "Moving Group";
-                        } else if (attackGroup != null) {
-                            txt = "Select Enemy Group to Attack"
-                        } else if (turn == "player" || turn == "buildings") {
-                            txt = "Player's Turn";
-                        } else if (turn == "enemy") {
-                            txt = "Enemy's Turn";
-                        } else {
-                            txt = "";
-                        }
-                        _ctx.font = "bold 8px Arial";
-                        _ctx.fillStyle = COLORS[3];
-                        _ctx.fillText(txt,120,9);
-                        _ctx.textAlign = "left";
+                    _ctx.fillStyle = COLORS[1];
+                    _ctx.strokeStyle = COLORS[0];
+                    _ctx.beginPath();
+                    _ctx.rect(-2,-2,244,15);
+                    _ctx.fill();
+                    _ctx.stroke();
+                    _ctx.textAlign = "center";
+                    let txt;
+                    if (movingGroup != null) {
+                        txt = "Moving Group";
+                    } else if (attackGroup != null) {
+                        txt = "Select Enemy Group to Attack"
+                    } else if (turn == "player" || turn == "buildings") {
+                        txt = "Player's Turn";
+                    } else if (turn == "enemy") {
+                        txt = "Enemy's Turn";
+                    } else {
+                        txt = "";
                     }
+                    _ctx.font = "bold 8px Arial";
+                    _ctx.fillStyle = COLORS[3];
+                    _ctx.fillText(txt,120,9);
+                    _ctx.textAlign = "left";
                 } else if (gameState == MENU_STATE) {
                     /*Sine wave*/
                     let flag = {x: 25, y: 90,period: 1.5,size: 50,width:80,wave: 5};
@@ -1720,23 +1792,27 @@
                     fullscreen = true;
                     if (window.screen.width > window.screen.height) {
                         _gameDiv.style.height = screen.height;
-                        _gameDiv.style.width = screen.height;
+                        //_gameDiv.style.width = screen.height;
+                        _gameDiv.style.width = screen.width;
                         _gameDiv.style.margin = "auto";
                         for (var i=0; i<canvases.length;i++){
-                            canvases[i].style.width = screen.height;
+                            //canvases[i].style.width = screen.height;
+                            canvases[i].style.width = screen.width;
                             canvases[i].style.height = screen.height;
-                            if (_gameDiv.offsetWidth > screen.height)
-                                canvases[i].style.left = screen.width/2 - screen.height/2;
+                            //if (_gameDiv.offsetWidth > screen.height)
+                                //canvases[i].style.left = screen.width/2 - screen.height/2;
                         }
                     } else {
                         _gameDiv.style.width = screen.width;
-                        _gameDiv.style.height = screen.width;
+                        //_gameDiv.style.height = screen.width;
+                        _gameDiv.style.height = screen.height;
                         _gameDiv.style.margin = "auto";
                         for (var i=0; i<canvases.length;i++){
                             canvases[i].style.width = screen.width;
-                            canvases[i].style.height = screen.width;
-                            if (_gameDiv.offsetHeight > screen.width)
-                                canvases[i].style.top = screen.height/2 - screen.width/2;
+                            //canvases[i].style.height = screen.width;
+                            canvases[i].style.height = screen.height;
+                            //if (_gameDiv.offsetHeight > screen.width)
+                                //canvases[i].style.top = screen.height/2 - screen.width/2;
                         }
                     }
                 } else {
