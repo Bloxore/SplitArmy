@@ -495,6 +495,7 @@
                     goto: null,
                     list: null,
                     actions: 3,
+                    attackSelectionFlag: false,
                     draw: () => {
                       state.update();
                       _ctx.globalAlpha = state.alpha;
@@ -521,6 +522,9 @@
                           _ctx.fillStyle = COLORS[3];
                           _ctx.font = "bold 8px Arial"
                           _ctx.fillText(state.members.length,state.x*TILEWIDTH + 33.5,state.y*TILEHEIGHT + 54.5);
+                          if (state.attackSelectionFlag == true) {
+                            _ctx.drawImage(graphics, 16*2, 16*3, 16, 16, state.x*TILEWIDTH, state.y*TILEHEIGHT + 12 + Math.sin(Date.now()/500)*5, 16, 16)
+                          }
                       } else {
                           /*Circle around group*/
                           _ctx.beginPath();
@@ -543,6 +547,7 @@
                           _ctx.fillText(state.actions,state.x*TILEWIDTH+3.25,state.y*TILEHEIGHT+21.5);
                       }
                       _ctx.globalAlpha = 1;
+                      state.attackSelectionFlag = false;
                     },
                     update: () => {
                       state.range = Math.ceil(state.members.length/10);
@@ -603,11 +608,6 @@
                           attacker.fade(200,0,() => {
                             attacker.kill();
                           });
-                      }
-                      //If both parties survived, allow the player to move away.
-                      if (state.members.length > 1 && attacker.members.length > 1) {
-                          //Indicate the player needs to move away.
-                          return true;
                       }
                       /* If either group needs to be faded start a timer */
                       if (attacker.members.length < 1 || state.members.length < 1) {
@@ -675,6 +675,8 @@
                       newGroup.members = state.members.splice(0,ammount);
                       shuffleGroup(state,12);
                       shuffleGroup(newGroup,12);
+                      //As to make spliting not completely overpowered
+                      state.actions -= 1;
                       return newGroup;
                     },
                     join: (group) => {
@@ -688,7 +690,7 @@
                     },
                     move: (range) => {
                       let limit = state;
-                      let moveAgain = false;
+                      let enemy = [false, 0]
                       //If no custom range is given use default, if a custom range is given, limit the movement.
                       if (range == null) {
                         range = state.range;
@@ -706,32 +708,53 @@
                         if (limit == null) {
                           skip = true;
                         }
-                        add(List(mouse.x - 5,mouse.y - 5,state, skip, (actionToPerform) => {
+                        for (let e=0; e < enemyGroups.length; e++) {
+                          if (pos[0] == enemyGroups[e].x && pos[1] == enemyGroups[e].y) {
+                            enemy = [true, e];
+                            //If enemy is too close, don't give option to split
+                            if (Math.sqrt(Math.pow(enemyGroups[e].x - state.x, 2) + Math.pow(enemyGroups[e].y - state.y, 2)) <= 1) {
+                              skip = true;
+                            }
+                          }
+                        }
+                        add(List(mouse.x - 5,mouse.y - 5,state, skip, enemy[0],(actionToPerform) => {
                           let additionalAction = "normal";
-                          if (actionToPerform == "Move") {
+                          if (actionToPerform == "Move" || actionToPerform == "Attack") {
                             additionalAction = "stop";
                           }
                           add(SplitSelector(state, additionalAction, (actionGroup) => {
                             //Check if enemy exists in position
-                            for (let e=0; e < enemyGroups.length; e++) {
-                              if (pos[0] == enemyGroups[e].x && pos[1] == enemyGroups[e].y) {
-                                moveAgain = enemyGroups[e].attack(actionGroup);
+                            if (enemy[0] == true) {
+                              calculateTileLayout(true);
+                              safePath = pathFind(state.x, state.y, enemyGroups[enemy[1]].x, enemyGroups[enemy[1]].y)
+                              if (safePath[safePath.length - 2]) {
+                                pos[0] = safePath[safePath.length - 2].x;
+                                pos[1] = safePath[safePath.length - 2].y;
+                              } else {
+                                pos[0] = state.x;
+                                pos[1] = state.y;
                               }
                             }
-                            //Check if player is in position
-                            for (let p=0; p < groups.length; p++) {
-                              if (pos[0] == groups[p].x && pos[1] == groups[p].y) {
-                                groups[p].join(actionGroup);
+                            //Check to see if player will move
+                            if (pos[0] == state.x && pos[1] == state.y) {
+                              //Player will not move
+                            } else {
+                              //Check for other player groups to merge
+                              for (let p=0; p < groups.length; p++) {
+                                if (pos[0] == groups[p].x && pos[1] == groups[p].y) {
+                                  groups[p].join(actionGroup);
+                                }
                               }
+                              //If the player will move remove one action
+                              actionGroup.actions -= 1;
                             }
 
                             actionGroup.moveTo(pos[0],pos[1], () => {
-                              if (moveAgain) {
-                                actionGroup.move(1);
-                              } else {
-                                actionGroup.actions -= 1;
-                                playerAction();
+                              //Attack the enemy after moving
+                              if (enemy[0] == true) {
+                                enemyGroups[enemy[1]].attack(actionGroup);
                               }
+                              playerAction();
                             },200)
                           }));
                         }));
@@ -859,7 +882,7 @@
                 return state;
             };
 
-            const List = (x,y,group,skip,callBack) => {
+            const List = (x,y,group,skip,attackMode,callBack) => {
                 let state = Object.assign(
                   GameObject(x,y),
                   {
@@ -957,6 +980,11 @@
                     state.inactive[0] = 1;
                     /*state.inactive[1] = 1;
                     state.inactive[2] = 1;*/
+                }
+
+                /*Change move to attack if attacking*/
+                if (attackMode == true) {
+                  state.items[1] = "Attack";
                 }
 
                 return state;
@@ -1121,7 +1149,7 @@
                     state.calculateTiles(x,y,range);
                     state.tiles = uniq_fast(state.tiles);
                     /* Check the layout of the grid */
-                    calculateTileLayout(player);
+                    calculateTileLayout(true);
                     for (let i=0;i<state.tiles.length;i++) {
                       if (state.tiles[i][0] > 4 || state.tiles[i][1] > 4) {
                         state.tiles.splice(i,1);
@@ -1163,6 +1191,12 @@
                       _ctx.fill();
                       _ctx.globalAlpha = 1;
                       _ctx.stroke();
+                      //Draw sword above enemy spaces
+                      for (let e=0; e < enemyGroups.length; e++) {
+                        if (state.tiles[i][0] == enemyGroups[e].x && state.tiles[i][1] == enemyGroups[e].y) {
+                          enemyGroups[e].attackSelectionFlag = true;
+                        }
+                      }
                     }
                   },
                   update: () => {
@@ -1342,7 +1376,7 @@
                 }
               }
               for (let i = 0; i < enemyGroups.length; i++) {
-                if (player && player.actions > 1) {
+                if (player == true) {
                   _tileLayout[enemyGroups[i].x][enemyGroups[i].y] = 1;
                 } else {
                   _tileLayout[enemyGroups[i].x][enemyGroups[i].y] = 0;
