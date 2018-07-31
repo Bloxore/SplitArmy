@@ -488,7 +488,7 @@
                   GameObject(x,y),
                   {
                     zIndex: 3,
-                    range: 16,
+                    range: 3,
                     enemy: false,
                     members: [],
                     group: "A",
@@ -550,7 +550,16 @@
                       state.attackSelectionFlag = false;
                     },
                     update: () => {
-                      state.range = Math.ceil(state.members.length/10);
+                      //Set range
+                      if (state.members.length < 5) {
+                        state.range = 3
+                      } else if (state.members.length < 15) {
+                        state.range = 2;
+                      } else if (state.members.length < 25) {
+                        state.range = 1;
+                      } else {
+                        state.range = 0;
+                      }
                       if (mouse.up == true && mouse.x > state.x*TILEWIDTH && mouse.x < state.x*TILEWIDTH + 48 && mouse.y > state.y*TILEWIDTH && mouse.y < state.y*TILEWIDTH + 45) {
                           if (enemy != true) {
                               /* Create action command list; only if player is enabled*/
@@ -590,7 +599,7 @@
                               state.goto = [state.x,20];
                       }
                     },
-                    attack: (attacker) => {
+                    attack: (attacker, callBack) => {
                       enemyLength = state.members.length;
                       state.members.splice(0,attacker.members.length);
                       attacker.actions -= 1;
@@ -613,11 +622,11 @@
                       if (attacker.members.length < 1 || state.members.length < 1) {
                         add(Timer(300,() => {
                           /* Check player status */
-                          playerAction();
+                          callBack();
                         }));
                       } else {
                         /* Check player status */
-                        playerAction();
+                        callBack();
                       }
                     },
                     moveTo: (x,y,callBack,customTime) => {
@@ -725,7 +734,7 @@
                           add(SplitSelector(state, additionalAction, (actionGroup) => {
                             //Check if enemy exists in position
                             if (enemy[0] == true) {
-                              calculateTileLayout(true);
+                              calculateTileLayout(state);
                               safePath = pathFind(state.x, state.y, enemyGroups[enemy[1]].x, enemyGroups[enemy[1]].y)
                               if (safePath[safePath.length - 2]) {
                                 pos[0] = safePath[safePath.length - 2].x;
@@ -751,10 +760,13 @@
 
                             actionGroup.moveTo(pos[0],pos[1], () => {
                               //Attack the enemy after moving
-                              if (enemy[0] == true) {
-                                enemyGroups[enemy[1]].attack(actionGroup);
+                              if (enemy[0] == true && state.actions > 0) {
+                                enemyGroups[enemy[1]].attack(actionGroup, () => {
+                                  playerAction();
+                                });
+                              } else {
+                                  playerAction();
                               }
-                              playerAction();
                             },200)
                           }));
                         }));
@@ -1149,7 +1161,7 @@
                     state.calculateTiles(x,y,range);
                     state.tiles = uniq_fast(state.tiles);
                     /* Check the layout of the grid */
-                    calculateTileLayout(true);
+                    calculateTileLayout(player);
                     for (let i=0;i<state.tiles.length;i++) {
                       if (state.tiles[i][0] > 4 || state.tiles[i][1] > 4) {
                         state.tiles.splice(i,1);
@@ -1376,7 +1388,9 @@
                 }
               }
               for (let i = 0; i < enemyGroups.length; i++) {
-                if (player == true) {
+                if (player && player.actions > 1) {
+                  _tileLayout[enemyGroups[i].x][enemyGroups[i].y] = 1;
+                } else if (player && player.actions == 1 && Math.sqrt(Math.pow(enemyGroups[i].x - player.x, 2) + Math.pow(enemyGroups[i].y - player.y, 2)) <= 1) {
                   _tileLayout[enemyGroups[i].x][enemyGroups[i].y] = 1;
                 } else {
                   _tileLayout[enemyGroups[i].x][enemyGroups[i].y] = 0;
@@ -1587,7 +1601,7 @@
               }
               /* End turn when all actions are used up */
               if (groups && turn == "player")
-                  if (groups.length > 0) {
+                  if (groups.length > 0 && enemyGroups.length > 0) {
                       let totalActions = 0;
                       for (let i=0;i<groups.length;i++)
                           if (groups[i])
