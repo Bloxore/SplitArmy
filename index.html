@@ -558,7 +558,8 @@
                       } else if (state.members.length < 25) {
                         state.range = 1;
                       } else {
-                        state.range = 0;
+                        //Only to attack and split
+                        state.range = 1;
                       }
                       if (mouse.up == true && mouse.x > state.x*TILEWIDTH && mouse.x < state.x*TILEWIDTH + 48 && mouse.y > state.y*TILEWIDTH && mouse.y < state.y*TILEWIDTH + 45) {
                           if (enemy != true) {
@@ -601,10 +602,10 @@
                     },
                     attack: (attacker, callBack) => {
                       add(AttackOverlay(attacker,state, () => {
-                        state.members.splice(0,Math.ceil(attacker.members.length/2));
+                        state.members.splice(0,Math.ceil(attacker.members.length));
                         attacker.actions -= 1;
                         /* Attacking group also takes loses */
-                        attacker.members.splice(0,Math.ceil(state.members.length/2));
+                        attacker.members.splice(0,Math.ceil(state.members.length));
                         shuffleGroup(attacker,12);
                         shuffleGroup(state,12);
                         /* Delete dead groups */
@@ -631,30 +632,46 @@
                       }));
                     },
                     moveTo: (x,y,callBack,customTime) => {
+                      //Move tile by tile
+                      let path = pathFind(state.x, state.y, x ,y);
+                      let currentDest;
+                      if (path.length > 0) {
+                        currentDest = path[0];
+                      } else {
+                        currentDest = {x: x, y: y};
+                      }
+
                       let time = 400;
                       if (customTime)
                         time = customTime;
                       let speed = {
-                        x: (x - state.x)/((time/1000)*60),
-                        y: (y - state.y)/((time/1000)*60)
+                        x: (currentDest.x - state.x)/((time/1000)*60),
+                        y: (currentDest.y - state.y)/((time/1000)*60)
                       }
                       add(Timer(time,() => {
-                        state.x = x;
-                        state.y = y;
-                        if (callBack)
-                          callBack();
+                        state.x = currentDest.x;
+                        state.y = currentDest.y;
+                        if (currentDest.x == x && currentDest.y == y) {
+                          // Misson Complete
+                          if (callBack)
+                            callBack();
+                        } else {
+                          // Keep going
+                          state.moveTo(x, y, callBack, customTime);
+                        }
                       },() => {
                         state.x += speed.x*deltaTime;
                         state.y += speed.y*deltaTime;
-                        if (speed.x > 0 && state.x > x || speed.x < 0 && state.x < x) {
-                          state.x = x;
+                        if (speed.x > 0 && state.x > currentDest.x || speed.x < 0 && state.x < currentDest.x) {
+                          state.x = currentDest.x;
                         }
-                        if (speed.y > 0 && state.y > y || speed.y < 0 && state.y < y) {
-                          state.y = y;
+                        if (speed.y > 0 && state.y > currentDest.y || speed.y < 0 && state.y < currentDest.y) {
+                          state.y = currentDest.y;
                         }
                       }));
                     },
                     kill: () => {
+                          state.actions = 0;
                           remove(state);
                           if (state.enemy == true) {
                               for (let i=0;i<enemyGroups.length;i++) {
@@ -689,13 +706,15 @@
                       state.actions -= 1;
                       return newGroup;
                     },
-                    join: (group) => {
+                    join: (group, callback) => {
                       //Join members
                       group.actions = state.actions;
                       group.fade(100,0,() => {
                         state.members = state.members.concat(group.members);
                         shuffleGroup(state,12);
                         group.kill();
+                        if (callback)
+                          callback();
                       });
                     },
                     move: (range) => {
@@ -774,97 +793,112 @@
                       }, limit);
                     },
                     enemyAction: (callback) => {
-                      if (state.members.length <= 0) {
+                      // Force rest
+                      if (state.members.length <= 0 || state.actions <= 0) {
                         state.actions = 0;
                         if (callback)
                           callback();
 
                         return;
                       }
-                      /* This is the enemy AI
-                          Priorities:
-                          1) Move towards enemy
-                          2) Attack when in range
-                      */
-                      /* Priority 1:
-                      Move enemy towards player
-                      Determine closest player and move maximum range towards it. Move just close enough to attack
-                      Goal: Choose weakest and closest group to move towards and attack
-                      */
-                      /* Determine what to advance on */
-                      let distances = [];
-                      let target = null;
                       calculateTileLayout();
-                      let path = null;
-                      let blackList = [];
 
-                      //Only compute a path if a player group exists
-                      if (groups.length > 0) {
-                        target = null;
-                        for (let i=0; i < groups.length; i++) {
-                            distances[i] = Math.sqrt(Math.pow(groups[i].x - state.x,2)+Math.pow(groups[i].y - state.y,2));
-                            if (distances[i-1] && distances[i] < distances[i-1]) {
-                                target = i;
-                            } else if (distances[i-1] == undefined) {
-                                target = 0;
-                            }
+                      closestGroup = groups[0];
+                      distance = pathFind(state.x, state.y, closestGroup.x, closestGroup.y).length;
+                      // Sort groups in order of distance (no need to test the first group against itself)
+                      for (let i = 1; i < groups.length; i++) {
+                        let testDistance = pathFind(state.x, state.y, groups[i].x, groups[i].y).length;
+                        if (testDistance < distance) {
+                          // If tested group is closer, set values appropiately
+                          closestGroup = groups[i];
+                          distance = testDistance;
                         }
-                        /* Find paths all around target */
-                        for (let i = 0; i < 4; i++) {
-                          x2 = groups[target].x + 1 * (i%2) * (i-2); //-1 for i == 1, 1 for i == 3
-                          y2 = groups[target].y + 1 * (Math.abs(2-i) - 1) //1 for i == 0, -1 for i == 2
+                      }
 
-                          let tempPath;
-                          if (x2 < 5 && 0 <= x2 && y2 < 5 && 0 <= y2) {
-                            tempPath = pathFind(state.x,state.y,x2,y2);
-                            if (tempPath.length > 0) {
-                              if (path == null || tempPath.length < path.length) {
-                                path = tempPath;
-                              }
+                      // Enemy defaults to pursuit mode, but will retreat if necessary
+                      // If the player is in range and the enemy is well enough to survive an attack, attack
+                      if (state.members.length > Math.ceil(closestGroup.members.length / 2) && distance <= 1) {
+                        closestGroup.attack(state, () => {
+                          //Cycle back for next action
+                          state.enemyAction(callback);
+                        })
+                      }
+                      // Move towards the player if enemy is in good shape
+                      else if (state.members.length > Math.ceil(closestGroup.members.length / 2) && state.members.length <= Math.ceil((closestGroup.members.length*3) / 2) && state.members.length < 25) {
+                        let path = pathFind(state.x, state.y, closestGroup.x, closestGroup.y);
+                        let safeDest = path[state.range - 1];
+                        if (path.length <= state.range) {
+                          safeDest = path[path.length - 2];
+                        }
+                        state.moveTo(safeDest.x, safeDest.y, () => {
+                          state.actions -= 1;
+                          state.enemyAction(callback);
+                        });
+                      }
+                      // If enemy is very well off, split the group
+                      else if (state.members.length > Math.ceil((closestGroup.members.length*3) / 2)) {
+                        let path = pathFind(state.x, state.y, closestGroup.x, closestGroup.y);
+                        let safeDest = path[state.range - 1];
+                        if (path.length <= state.range) {
+                          safeDest = path[path.length - 2];
+                        }
+
+                        // Move the new group to edge of range towards player group
+                        let newGroup = state.split(closestGroup.members.length);
+                        newGroup.moveTo(safeDest.x, safeDest.y, () => {
+                          newGroup.actions -= 1;
+                          state.enemyAction(callback);
+                        });
+                      }
+                      // If the enemy is too weak attempt to retreat and join with an ally
+                      else if (enemyGroups.length > 1 && state.members.length < 25) {
+                        closestEnemy = null;
+                        enemyDistance = null;
+                        calculateTileLayout(state);
+                        // Sort groups in order of distance (no need to test the first group against itself)
+                        for (let i = 0; i < enemyGroups.length; i++) {
+                          let testDistance = pathFind(state.x, state.y, enemyGroups[i].x, enemyGroups[i].y).length;
+                          if (testDistance > 0) {
+                            if (enemyDistance == null || testDistance < enemyDistance) {
+                              // If tested group is closer, set values appropiately
+                              closestEnemy = enemyGroups[i];
+                              enemyDistance = testDistance;
                             }
                           }
                         }
 
-                      }
-                      /* Make sure target is worth going for and that the enemy can even still move*/
-                      if (target != null && distances[target] > 1 && state.actions > 0 && path != null) {
-                          let range = state.range;
-                          let tileMovement = (i) => {
-                            if (range > 0) {
-                              state.moveTo(path[i].x,path[i].y, () => {
-                                range--;
-                                if (state.x == path[path.length - 1].x && state.y == path[path.length - 1].y) {
-                                  state.actions -= 1;
-                                  state.enemyAction(callback);
-                                } else {
-                                  tileMovement(i + 1);
-                                }
-                              });
-                            } else {
-                              state.actions -= 1;
-                              state.enemyAction(callback);
-                            }
-                          }
-                          tileMovement(0);
-                          return;
-                      }
-
-                      /* Priority 2
-                      Attack the closest player group
-                      */
-                      if (state.actions > 0 && groups[target] && distances[target] == 1) {
-                          groups[target].attack(state, () => {
-                            state.enemyAction(callback)
+                        //If enemy is close enough, join it
+                        if (enemyDistance <= state.range) {
+                          state.moveTo(closestEnemy.x, closestEnemy.y, () => {
+                            closestEnemy.join(state, () => {
+                              // Enemy is gone, no need to continue its turn
+                              if (callback)
+                                callback();
+                            });
                           });
-                          return;
+                        } else {
+                          // Otherwise, just move closer to it
+                          let enemyPath = pathFind(state.x, state.y, closestEnemy.x, closestEnemy.y);
+                          state.moveTo(enemyPath[state.range - 1].x, enemyPath[state.range - 1].y, () => {
+                            state.actions -= 1;
+                            state.enemyAction(callback);
+                          });
+                        }
                       }
-                      /* Priority 3
-                      Enemy can not do anything. Rest
-                      */
-                      state.actions = 0;
-                      //All done with enemy's action. Return to main function.
-                      if (callback)
-                        callback();
+                      // If there are no more enemy groups then this poor enemy can do nothing but sacrifice itself for the greater good
+                      else {
+                        if (state.members.length < 25 && distance <= 1) {
+                          closestGroup.attack(state, () => {
+                            //Cycle back for next action
+                            state.enemyAction(callback);
+                          })
+                        } else {
+                          // Just wait if group is too big
+                          state.actions = 0;
+                          if (callback)
+                            callback();
+                        }
+                      }
                     },
                 });
 
@@ -963,9 +997,6 @@
                       distance = Math.sqrt(Math.pow(enemyGroups[i].x - group.x,2)+Math.pow(enemyGroups[i].y - group.y,2));
                     }
                 }
-                if (distance > 1) {
-                    state.inactive[3] = 1;
-                }
                 /* Change split to rejoin */
                 if (groups.length > 1)
                     state.items[0] = "Join";
@@ -980,6 +1011,11 @@
                 /*Change move to attack if attacking*/
                 if (attackMode == true) {
                   state.items[1] = "Attack";
+                }
+
+                /* Disable moving if the group is too big */
+                if (group.members.length >= 25) {
+                  state.inactive[1] = 1;
                 }
 
                 return state;
@@ -1274,7 +1310,7 @@
                     }
                   },
                   attackerAttacks: () => {
-                    state.defenderHealth -= Math.ceil(state.attackerHealth/2);
+                    state.defenderHealth -= Math.ceil(state.attackerHealth);
                     if (state.defenderHealth <= 0) {
                       state.defenderHealth = 0;
                       add(Timer(600, () => {
@@ -1306,7 +1342,7 @@
                     }
                   },
                   defenderAttacks: () => {
-                    state.attackerHealth -= Math.ceil(state.defenderHealth / 2);
+                    state.attackerHealth -= Math.ceil(state.defenderHealth);
                     if (state.attackerHealth <= 0) {
                       state.attackerHealth = 0;
                       add(Timer(400, () => {
@@ -1432,8 +1468,8 @@
                     /* Create player */
                     shuffleGroup(createTroops(20,0,0,pushGroup(3,3)),12)
                     /* Create Enemies */
-                    shuffleGroup(createTroops(10,0,0,pushGroup(1,1,true)),12);
-                    shuffleGroup(createTroops(7,0,0,pushGroup(1,3,true)),12);
+                    shuffleGroup(createTroops(7,0,0,pushGroup(1,1,true)),12);
+                    shuffleGroup(createTroops(4,0,0,pushGroup(1,3,true)),12);
                     shuffleGroup(createTroops(7,0,0,pushGroup(4,4,true)),12);
                 } else if (level == 1) {
                     shuffleGroup(createTroops(10,0,0,pushGroup(3,4)),12);
@@ -1513,16 +1549,18 @@
                 }
               }
               for (let i = 0; i < groups.length; i++) {
-                if (player) {
-                  _tileLayout[groups[i].x][groups[i].y] = 1;
-                } else {
-                  _tileLayout[groups[i].x][groups[i].y] = 0;
-                }
+                  if (player && player.enemy == true) {
+                    _tileLayout[groups[i].x][groups[i].y] = 0;
+                  } else {
+                    _tileLayout[groups[i].x][groups[i].y] = 1;
+                  }
               }
               for (let i = 0; i < enemyGroups.length; i++) {
                 if (player && player.actions > 1) {
                   _tileLayout[enemyGroups[i].x][enemyGroups[i].y] = 1;
                 } else if (player && player.actions == 1 && Math.sqrt(Math.pow(enemyGroups[i].x - player.x, 2) + Math.pow(enemyGroups[i].y - player.y, 2)) <= 1) {
+                  _tileLayout[enemyGroups[i].x][enemyGroups[i].y] = 1;
+                } else if (player && player.enemy == true) {
                   _tileLayout[enemyGroups[i].x][enemyGroups[i].y] = 1;
                 } else {
                   _tileLayout[enemyGroups[i].x][enemyGroups[i].y] = 0;
