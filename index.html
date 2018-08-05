@@ -113,6 +113,7 @@
             let attackGroup;
             let gameState;
             let level;
+            let mission;
             let currentBuilding = 0;
             let enablePlayer;
             let _tileSelector;
@@ -1430,7 +1431,7 @@
                     _ctx.fillStyle = COLORS[3];
                     _ctx.font = "28px Arial Black";
                     _ctx.textAlign = "center";
-                    _ctx.fillText(levelData[level].name, WIDTH/4, 100 - 5*state.animationPercent);
+                    _ctx.fillText(levelData[mission][level].name, WIDTH/4, 100 - 5*state.animationPercent);
                     _ctx.globalAlpha = 1;
 
                     // Bar
@@ -1499,6 +1500,7 @@
             /*Game Start Code*/
             function gameStart() {
                 _tileSelector = TileSelect();
+                mission = 0;
                 switchState(MENU_STATE);
                 bgDraw();
             }
@@ -1531,17 +1533,17 @@
                         turnSwitch(true);
                 }, time: 20});
                 //Spawn player and enemy groups
-                for (let p = 0; p < levelData[level].groups.length; p++) {
-                  if (levelData[level].groups[p].units) {
-                    shuffleGroup(createTroops(levelData[level].groups[p].units,0,0,pushGroup(levelData[level].groups[p].x, levelData[level].groups[p].y)),12)
+                for (let p = 0; p < levelData[mission][level].groups.length; p++) {
+                  if (levelData[mission][level].groups[p].units) {
+                    shuffleGroup(createTroops(levelData[mission][level].groups[p].units,0,0,pushGroup(levelData[mission][level].groups[p].x, levelData[mission][level].groups[p].y)),12)
                   } else {
                     // If in a mission, carry unit count from previous stage. Add reinforcements
-                    shuffleGroup(createTroops(unitStorage + levelData[level].reinforcements,0,0,pushGroup(levelData[level].groups[p].x, levelData[level].groups[p].y)),12)
+                    shuffleGroup(createTroops(unitStorage + levelData[mission][level].reinforcements,0,0,pushGroup(levelData[mission][level].groups[p].x, levelData[mission][level].groups[p].y)),12)
                   }
                 }
 
-                for (let p = 0; p < levelData[level].enemies.length; p++) {
-                  shuffleGroup(createTroops(levelData[level].enemies[p].units,0,0,pushGroup(levelData[level].enemies[p].x, levelData[level].enemies[p].y, true)),12)
+                for (let p = 0; p < levelData[mission][level].enemies.length; p++) {
+                  shuffleGroup(createTroops(levelData[mission][level].enemies[p].units,0,0,pushGroup(levelData[mission][level].enemies[p].x, levelData[mission][level].enemies[p].y, true)),12)
                 }
             }
 
@@ -1630,7 +1632,7 @@
               //For collision tiles
               for (var r=0;r<5;r++) {
                   for (var c=0;c<5;c++) {
-                      if (levelData[level].data[r][c] != 0) {
+                      if (levelData[mission][level].data[r][c] != 0) {
                           _tileLayout[c][r] = 0;
                       }
                   }
@@ -1804,7 +1806,14 @@
                   unitStorage += groups[i].members.length;
                 }
                 turn = "win";
-                level++;
+                if (level == levelData[mission].length - 1) {
+                  //End of mission
+                  mission++;
+                  level = 0;
+                } else {
+                  //End of stage
+                  level++;
+                }
                 add(Message("STAGE CLEAR",120,-1, () => {
                     startFX(FADE,{complete: () => {
                       switchState(PRESTAGE_STATE);
@@ -1908,7 +1917,7 @@
                 if (mouse.x > 165 -52 && mouse.x < 165+52 && mouse.y > 168 && mouse.y < 202) {
                     _canvas.style.cursor = "pointer";
                     if (mouse.click && !fx.type) {
-                        level = 4;
+                        level = 0;
                         startFX(CIRCLE_TRANSITION,{complete: () => {
                           switchState(PRESTAGE_STATE);
                           add(LevelPreview());
@@ -2042,13 +2051,13 @@
                     /*Background*/
                     for (var r=0;r<5;r++) {
                         for (var c=0;c<5;c++) {
-                            if (levelData[level].data[r][c] == 0) {
+                            if (levelData[mission][level].data[r][c] == 0) {
                                 _bgCtx.drawImage(_tiles,0,0,TILEWIDTH,TILEHEIGHT,c*TILEWIDTH,r*45 + 14,TILEWIDTH,TILEHEIGHT+1);
                             }
-                            else if (levelData[level].data[r][c] == 1) {
+                            else if (levelData[mission][level].data[r][c] == 1) {
                                 _bgCtx.drawImage(_tiles,TILEWIDTH,0,TILEWIDTH,TILEHEIGHT,c*TILEWIDTH,r*45 + 14,TILEWIDTH,TILEHEIGHT+1);
                             }
-                            else if (levelData[level].data[r][c] == 2) {
+                            else if (levelData[mission][level].data[r][c] == 2) {
                                 _bgCtx.drawImage(_tiles,TILEWIDTH*2,0,TILEWIDTH,TILEHEIGHT,c*TILEWIDTH,r*45 + 14,TILEWIDTH,TILEHEIGHT+1);
                             }
                         }
