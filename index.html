@@ -118,7 +118,10 @@
             let enablePlayer;
             let _tileSelector;
             let _tileLayout = [];
+            let _dialogueBox;
             let unitStorage = 0;
+            let round = 0;
+            let actionLimit;
 
             /* Objects */
             const GameObject = (x,y) => {
@@ -544,6 +547,7 @@
                           _ctx.arc(state.x*TILEWIDTH + 6,state.y*TILEHEIGHT + 18.5,5,0,Math.PI*2);
                           _ctx.fill();
                           /*Info text*/
+                          _ctx.beginPath();
                           _ctx.fillStyle = COLORS[3];
                           _ctx.font = "bold 8px Arial"
                           _ctx.fillText(state.group + ": " + state.members.length,state.x*TILEWIDTH + 22.5,state.y*TILEHEIGHT + 58.5);
@@ -737,7 +741,7 @@
                           return;
                         }
                         let skip = false;
-                        if (limit == null) {
+                        if (limit == null || actionLimit == "move") {
                           skip = true;
                         }
                         for (let e=0; e < enemyGroups.length; e++) {
@@ -895,17 +899,6 @@
                             //Cycle back for next action
                             state.enemyAction(callback);
                           })
-                        } else if (state.members.length < 25 && state.actions > 1) {
-                          // Move in for the suicide attack, but only if the group will have a chance to attack
-                          let path = pathFind(state.x, state.y, closestGroup.x, closestGroup.y);
-                          let safeDest = path[state.range - 1];
-                          if (path.length <= state.range) {
-                            safeDest = path[path.length - 2];
-                          }
-                          state.moveTo(safeDest.x, safeDest.y, () => {
-                            state.actions -= 1;
-                            state.enemyAction(callback);
-                          });
                         } else {
                           // Just wait if group is too big
                           state.actions = 0;
@@ -1035,6 +1028,125 @@
                 return state;
             };
 
+            //dialogue box set to appear the bottom of the screen, is clicked activated.
+            const DialogueBox = () => {
+              let state = Object.assign(
+                GameObject(0,0),
+                {
+                  textSegments: [],
+                  currentSegment: -1,
+                  topText: "",
+                  bottomText: "",
+                  zIndex: 101,
+                  textYOffset: 0,
+                  scrolling: true,
+                  callback: null,
+                  start: (text, callback) => {
+                    add(state);
+                    menuActive = true;
+                    //reset variables
+                    state.topText = "";
+                    state.bottomText = "";
+                    state.y = HEIGHT/2;
+                    //Set-up callback
+                    if (callback) {
+                      state.callback = callback
+                    } else {
+                      state.callback = null;
+                    }
+                    animate(state, "y", HEIGHT/2 - 80, {time: 200, callback: () => {
+                      state.textSegments = text.split("~");
+                      state.currentSegment = 0;
+                      state.scrollText();
+                    }});
+                  },
+                  draw: () => {
+                    state.update();
+
+                    //Box BG
+                    _ctx.beginPath();
+                    _ctx.fillStyle = COLORS[3];
+                    _ctx.strokeStyle = COLORS[0];
+                    _ctx.lineWidth = 4;
+                    _ctx.rect(2, state.y, WIDTH / 2 - 4, 78);
+                    _ctx.fill();
+                    _ctx.stroke();
+
+                    //Draw the text in a clipped region
+                    _ctx.save();
+                    _ctx.clip();
+                    _ctx.fillStyle = COLORS[0];
+                    _ctx.align = "left";
+                    _ctx.font = "20px Arial Black";
+                    _ctx.fillText(state.topText, 10, state.y + 30 + state.textYOffset);
+                    _ctx.fillText(state.bottomText, 10, state.y + 60 + state.textYOffset);
+                    //Restore clipped region
+                    _ctx.restore();
+                  },
+                  scrollText: (index) => {
+                    state.scrolling = true;
+
+                    if (index == undefined)
+                      index = 1;
+
+                    add(Timer(15, () => {
+                      if (state.currentSegment % 2 == 0) {
+                        state.topText = state.textSegments[state.currentSegment].substring(0, index);
+                        //If the index is less than the length of the string, keep going
+                        if (index < state.textSegments[state.currentSegment].length) {
+                          state.scrollText(index + 1);
+                        } else {
+                          //Check if there are more text segments to scroll, if so, increment the currentSegment
+                          if (state.currentSegment < state.textSegments.length - 1) {
+                            state.currentSegment++;
+                            state.scrollText(0);
+                          } else {
+                            state.scrolling = false;
+                            //Nothing else to do
+                            return;
+                          }
+                        }
+                      } else {
+                        state.bottomText = state.textSegments[state.currentSegment].substring(0, index);
+                        if (index < state.textSegments[state.currentSegment].length) {
+                          state.scrollText(index + 1);
+                        } else {
+                          state.scrolling = false;
+                          //Do not automatically move on to the next segment
+                          return;
+                        }
+                      }
+                    }))
+                  },
+                  update: () => {
+                    if (mouse.click && state.scrolling == false && state.currentSegment < state.textSegments.length - 1) {
+                      state.scrolling = true;
+                      animate(state, "textYOffset", -80, {time: 300, callback: () => {
+                        state.textYOffset = 0;
+                        state.topText = "";
+                        state.bottomText = "";
+                        state.currentSegment += 1;
+                        state.scrollText();
+                      }});
+                    } else if (mouse.click && state.scrolling == false) {
+                      //Close the box
+                      state.scrolling = true;
+                      animate(state, "y", WIDTH/2, {time: 200, callback: () => {
+                        //Set everything back the way it should be
+                        remove(state);
+                        menuActive = false;
+                        if (state.callback) {
+                          state.callback();
+                        }
+                      }});
+                    }
+                  }
+                }
+              );
+
+              return state;
+            }
+
             const Message = (text,y,length,callBack) => {
                 let state = Object.assign(
                   GameObject(0,y),
@@ -1053,12 +1165,20 @@
                           return;
                         }
                         add(Timer(state.length, () => {
+                          if (state.height >= 50 || state.y <= y - 25) {
+                            state.y = y - 25;
+                            state.height = 50;
+                          }
                           state.close();
                         }));
                       }, () => {
                         /* Step 1 Progress*/
                         state.height += (50/15)*deltaTime;
                         state.y -= (25/15)*deltaTime;
+                        if (state.height >= 50 || state.y <= y - 25) {
+                          state.y = y - 25;
+                          state.height = 50;
+                        }
                       }));
                     },
                     close: () => {
@@ -1074,6 +1194,10 @@
                         /* Step 3 progress */
                         state.height -= (50/15)*deltaTime;
                         state.y += (25/15)*deltaTime;
+                        if (state.height <= 0 || state.y > y) {
+                          state.y = y;
+                          state.height = 0;
+                        }
                       }));
                     },
                     draw: () => {
@@ -1399,17 +1523,13 @@
               );
 
               //Bring the sides together
-              add(Timer(100, () => {
-                state.distanceApart = 0;
+              animate(state, "distanceApart", 0, {time: 100, callback: () => {
                 startFX(FLASH,{complete: () => {
                   add(Timer(400, () => {
                     state.attackerAttacks();
                   }));
                 }, time: 20, color: COLORS[3]});
-              }, () => {
-                //Animate pieces
-                state.distanceApart -= (WIDTH / 4 + 20) / 10;
-              }))
+              }});
 
               return state;
             }
@@ -1444,24 +1564,12 @@
 
               // Animate
               add(Timer(200,() => {
-                add(Timer(2000, () => {
-                  state.animationPercent = 1;
+                animate(state, "animationPercent", 1, {timer: 2000, callback: () => {
                   add(Timer(1000, () => {
                     startFX(FADE,{complete: beginLevel, time: 20});
-                    // Undoing effect
-                    add(Timer(750, null, () => {
-                      state.animationPercent -= 1/45;
-                      if (state.animationPercent <= 0) {
-                        state.animationPercent = 0;
-                      }
-                    }))
+                    animate(state, "animationPercent", 0, {timer: 750});
                   }));
-                }, () => {
-                  state.animationPercent += 1/60;
-                  if (state.animationPercent >= 1) {
-                    state.animationPercent = 1;
-                  }
-                }))
+                }});
               }))
 
               return state;
@@ -1476,6 +1584,38 @@
                     newGroup.group = String.fromCharCode(65 + groups.length-1);
                 }
                 return newGroup;
+            }
+
+            // Basic animation function
+            function animate(object, valueName, endValue, options) {
+              let time = 1000;
+              if (options.time) {
+                time = options.time;
+              }
+
+              let initalValue = object[valueName];
+              let increment = (endValue - initalValue) / ((time/1000)*60);
+              let overflow = 0;
+              if (initalValue > endValue) {
+                overflow = 1;
+              }
+
+              add(Timer(time, () => {
+                //Finish animation
+                object[valueName] = endValue;
+
+                //If there's a callback, do it
+                if (options.callback) {
+                  options.callback();
+                }
+              }, () => {
+                object[valueName] += increment;
+                if (overflow == 0 && object[valueName] > endValue) {
+                  object[valueName] = endValue;
+                } else if (overflow == 1 && object[valueName] < endValue) {
+                  object[valueName] = endValue;
+                }
+              }))
             }
 
             function add(obj,last) {
@@ -1500,6 +1640,7 @@
             /*Game Start Code*/
             function gameStart() {
                 _tileSelector = TileSelect();
+                _dialogueBox = DialogueBox();
                 mission = 0;
                 switchState(MENU_STATE);
                 bgDraw();
@@ -1523,6 +1664,7 @@
             }
 
             function beginLevel() {
+                round = 0;
                 switchState(GAME_STATE);
                 turn = "player";
                 /* Switch background */
@@ -1546,11 +1688,60 @@
                   shuffleGroup(createTroops(levelData[mission][level].enemies[p].units,0,0,pushGroup(levelData[mission][level].enemies[p].x, levelData[mission][level].enemies[p].y, true)),12)
                 }
             }
+            /*
+              Event types:
+              Dialogue: Pops up a dialogue box
+              Target: Targets a tile on screen
+              Limit: Limits the actions of the player
+            */
+            function parseRoundEvents(eventsArr, callback) {
+              //All events have been completed
+              if (eventsArr.length == 0) {
+                if (callback)
+                  callback();
+
+                return;
+              }
+              if (eventsArr[0].type == "dialogue") {
+                _dialogueBox.start(eventsArr[0].data, () => {
+                  //Dialogue is finished
+                  eventsArr.shift();
+                  parseRoundEvents(eventsArr, callback);
+                });
+              } else if (eventsArr[0].type == "target") {
+                let pos = eventsArr[0].data;
+                targetSprite(GameObject(pos[0], pos[1]), 1000, () => {
+                  //Targeting complete
+                  eventsArr.shift();
+                  parseRoundEvents(eventsArr, callback);
+                })
+              } else if (eventsArr[0].type == "limit") {
+                actionLimit = eventsArr[0].data;
+                eventsArr.shift();
+                parseRoundEvents(eventsArr, callback);
+              }
+            }
 
             function turnSwitch(player) {
                 if (player == true) {
-                    turn = "buildings";
-                    add(Message("PLAYER TURN",120,750,buildingsActions));
+                    //Start of a new round
+                    round++;
+                    //Reset actionlimits
+                    actionLimit = null;
+
+                    turn = "player";
+                    //Check for events
+                    let roundEvents = [];
+                    if (levelData[mission][level].events) {
+                      for (let i = 0; i < levelData[mission][level].events.length; i++) {
+                        if (levelData[mission][level].events[i].round == round) {
+                          roundEvents.push(levelData[mission][level].events[i]);
+                        }
+                      }
+                    }
+                    parseRoundEvents(roundEvents, () => {
+                      add(Message("PLAYER TURN",120,750, playerAction));
+                    })
                     /* Reset all groups */
                     for (let i=0;i<groups.length;i++) {
                         if (groups[i])

@@ -19,11 +19,75 @@ let levelData = [
         {x: 1, y: 3, units: 15}
       ],
       enemies: [
-        {x: 3, y: 0, units: 6},
+        {x: 4, y: 0, units: 10},
         {x: 3, y: 2, units: 10},
       ],
       name: "Village",
       reinforcements: 0,
+      //Events occur once at the start of a round
+      events: [
+        //Tutorial events
+        {
+          round: 1,
+          type: "dialogue",
+          data: "Your town is~under attack!~Defeat all enemies~on the field to~proceed to the next~stage."
+        },
+        {
+          round: 1,
+          type: "target",
+          data: [1,3]
+        },
+        {
+          round: 1,
+          type: "dialogue",
+          data: "This is your~group of soldiers."
+        },
+        {
+          round: 1,
+          type: "target",
+          data: [3,2]
+        },
+        {
+          round: 1,
+          type: "target",
+          data: [4,0]
+        },
+        {
+          round: 1,
+          type: "dialogue",
+          data: "These are your~enemies."
+        },
+        {
+          round: 1,
+          type: "target",
+          data: [3,2]
+        },
+        {
+          round: 1,
+          type: "dialogue",
+          data: "Select your group~and move it to this~spot to attack the~enemy."
+        },
+        {
+          round: 1,
+          type: "limit",
+          data: "move"
+        },
+        {
+          round: 2,
+          type: "dialogue",
+          data: "Once your turn~has ended, your~enemies will get~a chance to attack~your groups."
+        },
+        {
+          round: 2,
+          type: "dialogue",
+          data: "The amount of~damage delt is~equal to the~number of soldiers~in a group.~~This quantity is~represented by a~number in the~lower right corner~of the group.~~Additionally, this~number represents~a group's health."
+        },
+        {
+          round: 2,
+          type: "limit",
+          data: "move"
+        },
+      ]
     },
     /* Mission 1, Stage 2 */
     {
@@ -43,6 +107,23 @@ let levelData = [
       ],
       name: "Castle Wall",
       reinforcements: 0,
+      events: [
+        {
+          round: 1,
+          type: "dialogue",
+          data: "Sometimes, work~is best done apart."
+        },
+        {
+          round: 1,
+          type: "target",
+          data: [2,3]
+        },
+        {
+          round: 1,
+          type: "dialogue",
+          data: "Try moving half~the group here~by selecting 'Split'~from the menu~that appears when~moving."
+        },
+      ]
     },
     /* Mission 1, Stage 3 */
     {
