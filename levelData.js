@@ -10,8 +10,8 @@ let levelData = [
     {
       data: [
       [0,0,0,0,0],
-      [1,1,0,0,0],
-      [1,1,0,0,0],
+      [7,8,0,0,0],
+      [9,10,0,0,0],
       [0,0,0,0,0],
       [0,0,0,0,0],
       ],
@@ -80,7 +80,7 @@ let levelData = [
         {
           round: 2,
           type: "dialogue",
-          data: "The amount of~damage delt is~equal to the~number of soldiers~in a group.~~This quantity is~represented by a~number in the~lower right corner~of the group.~~Additionally, this~number represents~a group's health."
+          data: "The amount of~damage dealt is~equal to the~number of soldiers~in a group.~~This quantity is~represented by a~number in the~lower right corner~of the group.~~Additionally, this~number represents~a group's health."
         },
         {
           round: 2,
@@ -92,8 +92,8 @@ let levelData = [
     /* Mission 1, Stage 2 */
     {
       data: [
-      [1,1,1,1,1],
-      [1,1,1,1,1],
+      [6,6,6,6,6],
+      [6,6,6,6,6],
       [0,0,0,0,0],
       [0,0,0,0,0],
       [0,0,0,0,0],
@@ -128,11 +128,11 @@ let levelData = [
     /* Mission 1, Stage 3 */
     {
       data: [
-      [1,0,0,0,1],
-      [1,0,0,0,1],
-      [1,0,0,0,1],
-      [1,0,0,0,1],
-      [1,0,0,0,1],
+      [6,0,0,0,6],
+      [6,0,0,0,6],
+      [6,0,0,0,6],
+      [6,0,0,0,6],
+      [6,0,0,0,6],
       ],
       groups: [
         {x: 1, y: 3, units: 5},
@@ -143,11 +143,28 @@ let levelData = [
       ],
       name: "Castle Corridor",
       reinforcements: 0,
+      events: [
+        {
+          round: 1,
+          type: "dialogue",
+          data: "You may also join~a pair of groups."
+        },
+        {
+          round: 1,
+          type: "target",
+          data: [2,2]
+        },
+        {
+          round: 1,
+          type: "dialogue",
+          data: "Move both groups~to this spot to~join them together."
+        },
+      ]
     },
     /* Mission 1, Stage 4 */
     {
       data: [
-      [0,0,1,0,0],
+      [0,0,6,0,0],
       [0,0,0,0,0],
       [0,0,0,0,0],
       [0,0,0,0,0],
@@ -162,6 +179,23 @@ let levelData = [
       ],
       name: "Throne Room",
       reinforcements: 0,
+      events: [
+        {
+          round: 1,
+          type: "dialogue",
+          data: "You may have~noticed the number~at the top left~of a group."
+        },
+        {
+          round: 1,
+          type: "target",
+          data: [2,3]
+        },
+        {
+          round: 1,
+          type: "dialogue",
+          data: "This is your action~counter.~Moving, splitting,~and attacking cost~one action.~~If the action~counter reaches 0~the group can not~move for the rest~of the player's~turn."
+        },
+      ]
     },
   ],
   //Mission 2 start
@@ -169,11 +203,11 @@ let levelData = [
     /* Mission 2, Stage 1 */
     {
       data: [
-      [1,0,0,0,1],
+      [6,0,0,0,6],
       [0,0,0,0,0],
       [0,0,0,0,0],
-      [0,0,1,0,0],
-      [0,1,1,1,0],
+      [0,0,6,0,0],
+      [0,6,6,6,0],
       ],
       groups: [
         {x: 0, y: 3, units: 20}
@@ -189,8 +223,8 @@ let levelData = [
     {
       data: [
       [0,0,0,0,0],
-      [1,1,1,0,1],
-      [1,1,1,0,1],
+      [6,6,6,0,6],
+      [6,6,6,0,6],
       [0,0,0,0,0],
       [0,0,0,0,0],
       ],
@@ -207,11 +241,11 @@ let levelData = [
     /* Mission 2, Stage 3 */
     {
       data: [
-      [1,0,0,0,1],
-      [1,0,0,0,1],
-      [1,1,0,0,1],
-      [1,0,0,1,1],
-      [1,0,0,0,1],
+      [6,0,0,0,6],
+      [6,0,0,0,6],
+      [6,6,0,0,6],
+      [6,0,0,6,6],
+      [6,0,0,0,6],
       ],
       groups: [
         {x: 1, y: 3}
@@ -226,9 +260,9 @@ let levelData = [
     /* Mission 2, Stage 4 */
     {
       data: [
-      [1,1,1,1,1],
-      [1,0,0,0,1],
-      [1,0,0,0,1],
+      [6,6,6,6,6],
+      [6,0,0,0,6],
+      [6,0,0,0,6],
       [0,0,0,0,0],
       [0,0,0,0,0],
       ],
