@@ -1,5 +1,6 @@
 <html>
     <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, minimal-ui">
         <style>
             img {
                 display: none;
@@ -961,12 +962,21 @@
                           state.group = null;
                           callBack("Move");
                       }
+                      //Highlight hovered item
                       if (mouse.x > state.x && mouse.x < state.x + 50 && mouse.y > state.y && mouse.y < state.y + 70) {
                           state.active = Math.floor((mouse.y - state.y) / (70/state.items.length));
                       } else {
                           state.active = -1;
                       }
+
                       if (mouse.up) {
+                          //Detect which List item to select (for mobile)
+                          if (mouse.x > state.x && mouse.x < state.x + 50 && mouse.y > state.y && mouse.y < state.y + 70) {
+                              state.active = Math.floor((mouse.y - state.y) / (70/state.items.length));
+                          } else {
+                              state.active = -1;
+                          }
+
                           mouse.up = false;
                           if (state.inactive[state.active] == 0) {
                               //Disable player after making selection
@@ -1823,7 +1833,7 @@
               //For collision tiles
               for (var r=0;r<5;r++) {
                   for (var c=0;c<5;c++) {
-                      if (levelData[mission][level].data[r][c] > 6) {
+                      if (levelData[mission][level].data[r][c] > 5) {
                           _tileLayout[c][r] = 0;
                       }
                   }
@@ -2438,15 +2448,60 @@
             document.addEventListener("mozfullscreenchange", FShandler);
             document.addEventListener("MSFullscreenChange", FShandler);
 
+            //Desktop mouse input
             document.onmousemove =  (e) => {
                 let rect = _canvas.getBoundingClientRect();
-                mouse.x = Math.round((e.clientX-rect.left)/(rect.right-rect.left)*_canvas.width/2);
-                mouse.y = Math.round((e.clientY-rect.top)/(rect.bottom-rect.top)*_canvas.height/2);
+                mouse.x = Math.round((e.clientX-rect.left)/(rect.right-rect.left)*(_canvas.width/2));
+                mouse.y = Math.round((e.clientY-rect.top)/(rect.bottom-rect.top)*(_canvas.height/2));
             }
-            document.onmousedown = (e) => {mouse.down = true; mouse.click = true;}
-            document.onmouseup = (e) => {mouse.down = false; mouse.up = true;}
-            document.addEventListener("touchstart", (e) => {mouse.down = false; mouse.click = true;}, false);
-            document.addEventListener("touchend", (e) => {mouse.down = true; mouse.up = true;}, false);
+            document.onmousedown = (e) => {
+              let rect = _canvas.getBoundingClientRect();
+              mouse.x = Math.round((e.clientX-rect.left)/(rect.right-rect.left)*(_canvas.width/2));
+              mouse.y = Math.round((e.clientY-rect.top)/(rect.bottom-rect.top)*(_canvas.height/2));
+              mouse.down = true;
+              mouse.click = true;
+            }
+            document.onmouseup = (e) => {
+              let rect = _canvas.getBoundingClientRect();
+              mouse.x = Math.round((e.clientX-rect.left)/(rect.right-rect.left)*(_canvas.width/2));
+              mouse.y = Math.round((e.clientY-rect.top)/(rect.bottom-rect.top)*(_canvas.height/2));
+              mouse.down = false;
+              mouse.up = true;
+            }
+            //Mobile touch input
+            document.addEventListener("touchstart", (e) => {
+
+              let rect = _canvas.getBoundingClientRect();
+              mouse.x = Math.round((e.clientX-rect.left)/(rect.right-rect.left)*(_canvas.width/2));
+              mouse.y = Math.round((e.clientY-rect.top)/(rect.bottom-rect.top)*(_canvas.height/2));
+              mouse.down = true;
+              mouse.click = true;
+            }, false);
+
+            document.addEventListener("touchmove", (e) => {
+
+              let rect = _canvas.getBoundingClientRect();
+              mouse.x = Math.round((e.clientX-rect.left)/(rect.right-rect.left)*(_canvas.width/2));
+              mouse.y = Math.round((e.clientY-rect.top)/(rect.bottom-rect.top)*(_canvas.height/2));
+            }, false);
+
+            document.addEventListener("touchend", (e) => {
+
+              let rect = _canvas.getBoundingClientRect();
+              mouse.x = Math.round((e.clientX-rect.left)/(rect.right-rect.left)*(_canvas.width/2));
+              mouse.y = Math.round((e.clientY-rect.top)/(rect.bottom-rect.top)*(_canvas.height/2));
+              mouse.down = false;
+              mouse.up = true;
+            }, false);
+
+            document.addEventListener("touchcancel", (e) => {
+
+              let rect = _canvas.getBoundingClientRect();
+              mouse.x = Math.round((e.clientX-rect.left)/(rect.right-rect.left)*(_canvas.width/2));
+              mouse.y = Math.round((e.clientY-rect.top)/(rect.bottom-rect.top)*(_canvas.height/2));
+              mouse.down = false;
+              mouse.up = true;
+            }, false);
 
             /*Start game*/
             gameLoop();
