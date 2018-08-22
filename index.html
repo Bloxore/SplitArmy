@@ -50,8 +50,9 @@
         <div id="game"></div>
     </body>
     <!-- Import external code !-->
-    <script src="astar.js"></script>
-    <script src="levelData.js"></script>
+    <script src="lib/astar.js"></script>
+    <script src="lib/waud.js"></script>
+    <script src="data/levelData.js"></script>
     <!--Javascript code starts here !-->
     <script>
     	/* Engine Constants */
@@ -72,6 +73,14 @@
         const TILEHEIGHT = 226/5;
 
         const DEBUG = false;
+
+        const AUDIOFILES = [
+          {
+            name: "Title Screen",
+            src: "audio/TITLE.wav",
+            loop: true
+          }
+        ]
 
         let _lastTime = Date.now();
         let deltaTime = 1;
@@ -101,6 +110,7 @@
             /* Assign graphics their own variable */
             let graphics = document.getElementById("g");
             let _tiles = document.getElementById("t");
+            let sounds = {};
 
             let objects = [];
             let objId = 0;
@@ -565,11 +575,11 @@
                     },
                     update: () => {
                       //Set range
-                      if (state.members.length < 5) {
+                      if (state.members.length <= 5) {
                         state.range = 3
-                      } else if (state.members.length < 15) {
+                      } else if (state.members.length <= 15) {
                         state.range = 2;
-                      } else if (state.members.length < 25) {
+                      } else if (state.members.length <= 25) {
                         state.range = 1;
                       } else {
                         //Only to attack and split
@@ -901,7 +911,7 @@
                       }
                       // If there are no more enemy groups then this poor enemy can do nothing but sacrifice itself for the greater good
                       else {
-                        if (state.members.length < 25 && distance <= 1) {
+                        if (state.members.length <= 25 && distance <= 1) {
                           closestGroup.attack(state, () => {
                             //Cycle back for next action
                             state.enemyAction(callback);
@@ -1037,7 +1047,7 @@
                 }
 
                 /* Disable moving if the group is too big */
-                if (group.members.length >= 25) {
+                if (group.members.length > 25) {
                   state.inactive[1] = 1;
                 }
 
@@ -1657,9 +1667,33 @@
             function gameStart() {
                 _tileSelector = TileSelect();
                 _dialogueBox = DialogueBox();
-                mission = 0;
+                mission = 1;
                 switchState(MENU_STATE);
                 bgDraw();
+            }
+
+            function load() {
+              Waud.init();
+              //Auto mute audio when inactive
+              Waud.autoMute();
+
+              //Mobile unlock
+              Waud.enableTouchUnlock();
+
+              loadAudioFiles();
+            }
+
+            function checkLoadProgress() {
+              //Get length of "sounds" object
+              let soundsLength = 0;
+              for (let name in sounds)
+                soundsLength++;
+
+              //If this is true, all sound files have loaded
+              if (soundsLength == AUDIOFILES.length) {
+                gameStart();
+                gameLoop();
+              }
             }
 
             function switchState(newState) {
@@ -1677,6 +1711,13 @@
                 _canvas.style.cursor = "default";
                 _tileLayout = [];
                 gameState = newState;
+                //Disable all audio
+                stopAllAudio();
+
+                if (gameState == MENU_STATE) {
+
+                  sounds['Title Screen'].play();
+                }
             }
 
             function beginLevel() {
@@ -1735,6 +1776,31 @@
                 actionLimit = eventsArr[0].data;
                 eventsArr.shift();
                 parseRoundEvents(eventsArr, callback);
+              }
+            }
+
+            function loadAudioFiles(index) {
+              if (!index)
+                index = 0;
+
+              let audio = new WaudSound(AUDIOFILES[index].src, {
+                loop: AUDIOFILES[index].loop,
+                onload: () => {
+                  sounds[AUDIOFILES[index].name] = audio;
+                  index++;
+                  if (index == AUDIOFILES.length) {
+                    //Done loading
+                    checkLoadProgress();
+                  } else {
+                    loadAudioFiles(index);
+                  }
+                }
+              });
+            }
+
+            function stopAllAudio() {
+              for (let title in sounds) {
+                  sounds[title].stop();
               }
             }
 
@@ -2455,7 +2521,7 @@
             document.addEventListener("MSFullscreenChange", FShandler);
 
             //Desktop mouse input
-            document.onmousemove =  (e) => {
+            _gameDiv.onmousemove =  (e) => {
                 let rect = _canvas.getBoundingClientRect();
                 mouse.x = Math.round((e.clientX-rect.left)/(rect.right-rect.left)*(_canvas.width/2));
                 mouse.y = Math.round((e.clientY-rect.top)/(rect.bottom-rect.top)*(_canvas.height/2));
@@ -2466,7 +2532,7 @@
                   document.getElementById("log").prepend(logTxt);
                 }
             }
-            document.onmousedown = (e) => {
+            _gameDiv.onmousedown = (e) => {
               let rect = _canvas.getBoundingClientRect();
               mouse.x = Math.round((e.clientX-rect.left)/(rect.right-rect.left)*(_canvas.width/2));
               mouse.y = Math.round((e.clientY-rect.top)/(rect.bottom-rect.top)*(_canvas.height/2));
@@ -2479,7 +2545,7 @@
                 document.getElementById("log").prepend(logTxt);
               }
             }
-            document.onmouseup = (e) => {
+            _gameDiv.onmouseup = (e) => {
               let rect = _canvas.getBoundingClientRect();
               mouse.x = Math.round((e.clientX-rect.left)/(rect.right-rect.left)*(_canvas.width/2));
               mouse.y = Math.round((e.clientY-rect.top)/(rect.bottom-rect.top)*(_canvas.height/2));
@@ -2493,7 +2559,7 @@
               }
             }
             //Mobile touch input
-            document.addEventListener("touchstart", (e) => {
+            _gameDiv.addEventListener("touchstart", (e) => {
               e.stopPropagation()
 
               let rect = _canvas.getBoundingClientRect();
@@ -2510,7 +2576,7 @@
               }
             }, false);
 
-            document.addEventListener("touchmove", (e) => {
+            _gameDiv.addEventListener("touchmove", (e) => {
               e.stopPropagation()
 
               let rect = _canvas.getBoundingClientRect();
@@ -2525,7 +2591,7 @@
               }
             }, false);
 
-            document.addEventListener("touchend", (e) => {
+            _gameDiv.addEventListener("touchend", (e) => {
               e.stopPropagation()
 
               let rect = _canvas.getBoundingClientRect();
@@ -2542,7 +2608,7 @@
               }
             }, false);
 
-            document.addEventListener("touchcancel", (e) => {
+            _gameDiv.addEventListener("touchcancel", (e) => {
               e.stopPropagation()
 
               let rect = _canvas.getBoundingClientRect();
@@ -2560,8 +2626,7 @@
             }, false);
 
             /*Start game*/
-            gameLoop();
-            gameStart();
+            load();
         }
     </script>
     <p id="log"></p>
@@ -2571,8 +2636,12 @@ opengameart.org
 Videlais for the tile sheet
 darkagent for players and enemies
 
+Powered by waud.js for audio
+
+Astar pathfinding code by Brian Grinstead
+
 lospec.com
 Kirokaze for Pallet
 !-->
-<img id="g" src="graphics.png" alt="" />
-<img id="t" src="tiles.png" alt="" />
+<img id="g" src="graphics/graphics.png" alt="" />
+<img id="t" src="graphics/tiles.png" alt="" />
