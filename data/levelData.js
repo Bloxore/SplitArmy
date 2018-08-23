@@ -203,20 +203,21 @@ let levelData = [
     /* Mission 2, Stage 1 */
     {
       data: [
-      [6,0,0,0,6],
       [0,0,0,0,0],
+      [6,0,0,6,0],
       [0,0,0,0,0],
-      [0,0,6,0,0],
-      [0,6,6,6,0],
+      [0,6,0,0,0],
+      [0,0,0,0,0],
       ],
       groups: [
-        {x: 0, y: 3, units: 20}
+        {x: 1, y: 4, units: 15}
       ],
       enemies: [
-        {x: 4, y: 1, units: 5},
-        {x: 3, y: 2, units: 10}
+        {x: 1, y: 1, units: 5},
+        {x: 4, y: 2, units: 5},
+        {x: 3, y: 3, units: 10}
       ],
-      name: "Giford Forest",
+      name: "Forest Front",
       reinforcements: 0,
     },
     /* Mission 2, Stage 2 */

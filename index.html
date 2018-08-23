@@ -518,6 +518,7 @@
                     goto: null,
                     list: null,
                     actions: 3,
+                    resistance: 1,
                     attackSelectionFlag: false,
                     draw: () => {
                       state.update();
@@ -626,7 +627,8 @@
                     },
                     attack: (attacker, callBack) => {
                       add(AttackOverlay(attacker,state, () => {
-                        state.members.splice(0,Math.ceil(attacker.members.length));
+                        //Don't forget to calculate resistance as well
+                        state.members.splice(0,Math.ceil(attacker.members.length/state.resistance));
                         attacker.actions -= 1;
                         /* Attacking group also takes loses */
                         attacker.members.splice(0,Math.ceil(state.members.length));
@@ -754,6 +756,8 @@
                         //If selected self then rest
                         if (pos[0] == state.x && pos[1] == state.y) {
                           state.actions = 0;
+                          //Added bonus of resistance when resting
+                          state.resistance = 2;
                           playerAction();
                           return;
                         }
@@ -819,6 +823,8 @@
                     enemyAction: (callback) => {
                       // Force rest
                       if (state.members.length <= 0 || state.actions <= 0 || groups.length < 1 || enemyGroups.length < 1) {
+                        //resistance boost
+                        state.resistance = 2;
                         state.actions = 0;
                         if (callback)
                           callback();
@@ -828,6 +834,7 @@
                       calculateTileLayout();
 
                       closestGroup = groups[0];
+                      weakestGroup = groups[0];
                       distance = pathFind(state.x, state.y, closestGroup.x, closestGroup.y).length;
                       // Sort groups in order of distance (no need to test the first group against itself)
                       for (let i = 1; i < groups.length; i++) {
@@ -837,6 +844,16 @@
                           closestGroup = groups[i];
                           distance = testDistance;
                         }
+                        //Cheak group strength
+                        if (groups[i].members.length < weakestGroup.members.length*weakestGroup.resistance) {
+                          weakestGroup = groups[i];
+                        }
+                      }
+
+                      //If closest group is too strong, head towards the weakest
+                      if (Math.ceil(closestGroup.members.length/2) >= state.members.length) {
+                        closestGroup = weakestGroup;
+                        distance = pathFind(state.x, state.y, weakestGroup.x, weakestGroup.y).length;
                       }
 
                       // Enemy defaults to pursuit mode, but will retreat if necessary
@@ -849,6 +866,12 @@
                       }
                       // Move towards the player if enemy is in good shape
                       else if (state.members.length > Math.ceil(closestGroup.members.length / 2) && state.members.length <= Math.ceil((closestGroup.members.length*3) / 2) && state.members.length < 25) {
+                        //Trick the pathfinder to allow target player be seen as an enemy
+                        //Yeah, yeah. It's a hack, but it works
+                        enemyGroups.push(closestGroup);
+                        calculateTileLayout(state);
+                        enemyGroups.pop();
+
                         let path = pathFind(state.x, state.y, closestGroup.x, closestGroup.y);
                         let safeDest = path[state.range - 1];
                         if (path.length <= state.range) {
@@ -919,6 +942,8 @@
                         } else {
                           // Just wait if group is too big
                           state.actions = 0;
+                          //Waiting has the side benefit of raising resistance
+                          state.resistance = 2;
                           if (callback)
                             callback();
                         }
@@ -1474,7 +1499,7 @@
                     }
                   },
                   attackerAttacks: () => {
-                    state.defenderHealth -= Math.ceil(state.attackerHealth);
+                    state.defenderHealth -= Math.ceil(state.attackerHealth/defender.resistance);
                     if (state.defenderHealth <= 0) {
                       state.defenderHealth = 0;
                       add(Timer(600, () => {
@@ -1826,8 +1851,11 @@
                     })
                     /* Reset all groups */
                     for (let i=0;i<groups.length;i++) {
-                        if (groups[i])
+                        if (groups[i]) {
                           groups[i].actions = 3;
+                          //resistance is lost after 1 turn
+                          groups[i].resistance = 1;
+                        }
                     }
                     calculateTileLayout();
                 } else {
@@ -1835,8 +1863,11 @@
                     turn = "enemy";
                     add(Message("ENEMY TURN",120,750,enemyActions));
                     for (let i=0;i<enemyGroups.length;i++) {
-                        if (enemyGroups[i])
-                            enemyGroups[i].actions = 3;
+                        if (enemyGroups[i]) {
+                          enemyGroups[i].actions = 3;
+                          //Resistance is lost after 1 turn
+                          enemyGroups[i].resistance = 1;
+                        }
                     }
                 }
             }
