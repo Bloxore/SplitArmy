@@ -16,11 +16,11 @@ let levelData = [
       [0,0,0,0,0],
       ],
       groups: [
-        {x: 1, y: 3, units: 15}
+        {x: 1, y: 3, units: 20}
       ],
       enemies: [
-        {x: 4, y: 0, units: 10},
-        {x: 3, y: 2, units: 10},
+        {x: 4, y: 0, units: 12},
+        {x: 3, y: 2, units: 15},
       ],
       name: "Village",
       reinforcements: 0,
@@ -80,7 +80,7 @@ let levelData = [
         {
           round: 2,
           type: "dialogue",
-          data: "The amount of~damage dealt is~equal to the~number of soldiers~in a group.~~This quantity is~represented by a~number in the~lower right corner~of the group.~~Additionally, this~number represents~a group's health."
+          data: "The number in the~lower-right corner~of a group~quantifies its units.~A group's attack~power and health~are tied to this~number.~Do your best to not~let it decrease."
         },
         {
           round: 2,
@@ -92,8 +92,8 @@ let levelData = [
     /* Mission 1, Stage 2 */
     {
       data: [
-      [6,6,6,6,6],
-      [6,6,6,6,6],
+      [12,12,12,12,12],
+      [11,11,11,11,11],
       [0,0,0,0,0],
       [0,0,0,0,0],
       [0,0,0,0,0],
@@ -128,11 +128,11 @@ let levelData = [
     /* Mission 1, Stage 3 */
     {
       data: [
-      [6,0,0,0,6],
-      [6,0,0,0,6],
-      [6,0,0,0,6],
-      [6,0,0,0,6],
-      [6,0,0,0,6],
+      [13,1,1,1,13],
+      [13,1,1,1,13],
+      [13,1,1,1,13],
+      [13,1,1,1,13],
+      [13,1,1,1,13],
       ],
       groups: [
         {x: 1, y: 3, units: 5},
@@ -164,11 +164,11 @@ let levelData = [
     /* Mission 1, Stage 4 */
     {
       data: [
-      [0,0,6,0,0],
-      [0,0,0,0,0],
-      [0,0,0,0,0],
-      [0,0,0,0,0],
-      [0,0,0,0,0],
+      [1,1,14,1,1],
+      [1,1,1,1,1],
+      [1,1,1,1,1],
+      [1,1,1,1,1],
+      [1,1,1,1,1],
       ],
       groups: [
         {x: 2, y: 3, units: 20}
@@ -204,28 +204,59 @@ let levelData = [
     {
       data: [
       [0,0,0,0,0],
-      [6,0,0,6,0],
+      [15,0,0,15,0],
       [0,0,0,0,0],
-      [0,6,0,0,0],
+      [0,15,0,0,0],
       [0,0,0,0,0],
       ],
       groups: [
-        {x: 1, y: 4, units: 15}
+        {x: 1, y: 4, units: 20}
       ],
       enemies: [
-        {x: 1, y: 1, units: 5},
-        {x: 4, y: 2, units: 5},
-        {x: 3, y: 3, units: 10}
+        {x: 1, y: 2, units: 10},
+        {x: 3, y: 0, units: 10},
       ],
       name: "Forest Front",
       reinforcements: 0,
+      events: [
+        {
+          round: 1,
+          type: "dialogue",
+          data: "Checkpoint~reached."
+        },
+        {
+          round: 1,
+          type: "dialogue",
+          data: "From now on your~units will carry~from level to level.~~Be cautious how~you proceed."
+        },
+      ]
     },
     /* Mission 2, Stage 2 */
     {
       data: [
+      [0,0,0,15,15],
+      [0,15,0,0,0],
       [0,0,0,0,0],
-      [6,6,6,0,6],
-      [6,6,6,0,6],
+      [0,0,15,15,0],
+      [0,15,15,15,15],
+      ],
+      groups: [
+        {x: 0, y: 1}
+      ],
+      enemies: [
+        {x: 0, y: 4, units: 5},
+        {x: 4, y: 3, units: 10},
+        {x: 3, y: 1, units: 5}
+      ],
+      name: "Giford Forest",
+      reinforcements: 5,
+    },
+    /* Mission 2, Stage 3*/
+    {
+      data: [
+      [0,0,0,0,0],
+      [6,6,6,1,6],
+      [6,6,6,1,6],
       [0,0,0,0,0],
       [0,0,0,0,0],
       ],
@@ -239,8 +270,7 @@ let levelData = [
       name: "River Crossing",
       reinforcements: 5,
     },
-    /* Mission 2, Stage 3 */
-    {
+    /*{
       data: [
       [6,0,0,0,6],
       [6,0,0,0,6],
@@ -257,11 +287,11 @@ let levelData = [
       ],
       name: "Narrow Pass",
       reinforcements: 5,
-    },
+    },*/
     /* Mission 2, Stage 4 */
     {
       data: [
-      [6,6,6,6,6],
+      [11,11,11,11,11],
       [6,0,0,0,6],
       [6,0,0,0,6],
       [0,0,0,0,0],
@@ -271,9 +301,9 @@ let levelData = [
         {x: 2, y: 4}
       ],
       enemies: [
-        {x: 1, y: 2, units: 4},
-        {x: 2, y: 1, units: 4},
-        {x: 3, y: 2, units: 4}
+        {x: 1, y: 2, units: 10},
+        {x: 2, y: 1, units: 5},
+        {x: 3, y: 2, units: 10}
       ],
       name: "Giford Moat",
       reinforcements: 5,
