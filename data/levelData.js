@@ -19,7 +19,7 @@ let levelData = [
         {x: 1, y: 3, units: 20}
       ],
       enemies: [
-        {x: 4, y: 0, units: 12},
+        {x: 4, y: 0, units: 15},
         {x: 3, y: 2, units: 15},
       ],
       name: "Village",
@@ -213,8 +213,8 @@ let levelData = [
         {x: 1, y: 4, units: 20}
       ],
       enemies: [
-        {x: 1, y: 2, units: 10},
         {x: 3, y: 0, units: 10},
+        {x: 1, y: 2, units: 15},
       ],
       name: "Forest Front",
       reinforcements: 0,
@@ -244,12 +244,12 @@ let levelData = [
         {x: 0, y: 1}
       ],
       enemies: [
-        {x: 0, y: 4, units: 5},
         {x: 4, y: 3, units: 10},
+        {x: 0, y: 4, units: 10},
         {x: 3, y: 1, units: 5}
       ],
       name: "Giford Forest",
-      reinforcements: 5,
+      reinforcements: 0,
     },
     /* Mission 2, Stage 3*/
     {
@@ -264,11 +264,11 @@ let levelData = [
         {x: 1, y: 3}
       ],
       enemies: [
-        {x: 3, y: 0, units: 10},
-        {x: 4, y: 3, units: 5}
+        {x: 3, y: 0, units: 15},
+        {x: 4, y: 3, units: 10}
       ],
       name: "River Crossing",
-      reinforcements: 5,
+      reinforcements: 0,
     },
     /*{
       data: [
@@ -302,11 +302,11 @@ let levelData = [
       ],
       enemies: [
         {x: 1, y: 2, units: 10},
-        {x: 2, y: 1, units: 5},
+        {x: 2, y: 1, units: 15},
         {x: 3, y: 2, units: 10}
       ],
       name: "Giford Moat",
-      reinforcements: 5,
+      reinforcements: 0,
     },
   ]
 ]

@@ -16,7 +16,7 @@
   const TILEWIDTH = WIDTH/10;
   const TILEHEIGHT = 226/5;
 
-  const DEBUG = false;
+  const DEBUG = true;
 
   const AUDIOFILES = [
     {
@@ -51,9 +51,16 @@
       /*Scale up game*/
       _ctx.scale(2,2);
 
+      let f = _gameDiv.parentNode.appendChild(document.createElement("DIV"));
+      f.id = "f";
+      f.className = "button";
+      f.innerHTML = "Fullscreen";
+
       /* Assign graphics their own variable */
-      let graphics = document.getElementById("g");
-      let _tiles = document.getElementById("t");
+      let graphics = document.createElement("IMG");
+      graphics.src = "graphics/graphics.png";
+      let _tiles = document.createElement("IMG");
+      _tiles.src = "graphics/tiles.png";
       let sounds = {};
 
       let objects = [];
@@ -583,24 +590,40 @@
               },
               attack: (attacker, callBack) => {
                 add(AttackOverlay(attacker,state, () => {
+                  //The attacker and defender will "capture" half the enemies they kill
+                  let attackerCapture = Math.floor(Math.ceil(attacker.members.length/Math.sqrt(state.resistance))/2);
+                  if (attackerCapture > state.members.length/2) {
+                    attackerCapture = state.members.length/2;
+                  }
                   //Don't forget to calculate resistance as well
                   state.members.splice(0,Math.ceil(attacker.members.length/Math.sqrt(state.resistance)));
                   attacker.actions -= 1;
                   /* Attacking group also takes loses */
+                  let defenderCapture = Math.floor(Math.ceil(state.members.length)/2);
+                  if (defenderCapture > attacker.members.length/2) {
+                    defenderCapture = attacker.members.length/2;
+                  }
                   attacker.members.splice(0,Math.ceil(state.members.length));
-                  shuffleGroup(attacker,12);
-                  shuffleGroup(state,12);
+
                   /* Delete dead groups */
                   if (state.members.length < 1){
                       state.fade(200,0,() => {
                         state.kill();
                       });
+                  } else {
+                    createTroops(defenderCapture, 0, 0, state);
                   }
+
                   if (attacker.members.length < 1){
                       attacker.fade(200,0,() => {
                         attacker.kill();
                       });
+                  } else {
+                    createTroops(attackerCapture, 0, 0, attacker);
                   }
+
+                  shuffleGroup(attacker,12);
+                  shuffleGroup(state,12);
                   /* If either group needs to be faded start a timer */
                   if (attacker.members.length < 1 || state.members.length < 1) {
                     add(Timer(300,() => {
@@ -827,7 +850,7 @@
                   })
                 }
                 // Move towards the player if enemy is in good shape
-                else if (Math.ceil(state.members.length/Math.sqrt(closestGroup.resistance)) > Math.ceil(closestGroup.members.length / 2) && Math.ceil(state.members.length/Math.sqrt(closestGroup.resistance)) <= Math.ceil((closestGroup.members.length*3) / 2) && state.members.length < 25 && distance > 0) {
+                else if (Math.ceil(state.members.length/Math.sqrt(closestGroup.resistance)) > Math.ceil(closestGroup.members.length / 2) && Math.ceil(state.members.length/Math.sqrt(closestGroup.resistance)) <= Math.ceil((closestGroup.members.length*3) / 2) && state.members.length <= 25 && distance > 0) {
                   state.playerTarget = closestGroup;
                   calculateTileLayout(state);
                   state.playerTarget = null;
@@ -859,7 +882,7 @@
                   });
                 }
                 // If the enemy is too weak attempt to retreat and join with an ally
-                else if (enemyGroups.length > 1 && state.members.length < 25) {
+                else if (enemyGroups.length > 1 && state.members.length <= 25) {
                   closestEnemy = null;
                   enemyDistance = null;
                   calculateTileLayout(state);
@@ -1663,7 +1686,7 @@
       function gameStart() {
           _tileSelector = TileSelect();
           _dialogueBox = DialogueBox();
-          mission = 0;
+          mission = 1;
           startFX(FLASH,{color: "#FFF275"})
           switchState(MENU_STATE);
       }
@@ -2507,24 +2530,26 @@
           if (fullscreen == false) {
               fullscreen = true;
               if (window.screen.width > window.screen.height) {
-                  _gameDiv.style.height = screen.height;
+                  _gameDiv.style.height = "100%";
                   _gameDiv.style.width = screen.height;
                   //_gameDiv.style.width = screen.width;
                   _gameDiv.style.margin = "auto";
                   for (var i=0; i<canvases.length;i++){
+                      canvases[i].style.maxWidth = "unset";
                       canvases[i].style.width = screen.height;
                       //canvases[i].style.width = screen.width;
-                      canvases[i].style.height = screen.height;
+                      canvases[i].style.height = "100%";
                       if (_gameDiv.offsetWidth > screen.height)
                           canvases[i].style.left = screen.width/2 - screen.height/2;
                   }
               } else {
-                  _gameDiv.style.width = screen.width;
+                  _gameDiv.style.width = "100%";
                   _gameDiv.style.height = screen.width;
                   //_gameDiv.style.height = screen.height;
                   _gameDiv.style.margin = "auto";
                   for (var i=0; i<canvases.length;i++){
-                      canvases[i].style.width = screen.width;
+                      canvases[i].style.maxWidth = "unset";
+                      canvases[i].style.width = "100%";
                       canvases[i].style.height = screen.width;
                       //canvases[i].style.height = screen.height;
                       if (_gameDiv.offsetHeight > screen.width)
@@ -2537,8 +2562,9 @@
               _gameDiv.style.height = _canvas.height;
               _gameDiv.style.margin = 0;
               for (let i=0; i<canvases.length;i++){
-                      canvases[i].style.width = _canvas.width;
-                      canvases[i].style.height = _canvas.width;
+                      canvases[i].style.maxWidth = "100%";
+                      canvases[i].style.width = WIDTH;
+                      canvases[i].style.height = HEIGHT;
                       canvases[i].style.left = 0;
                       canvases[i].style.top = 0;
               }
@@ -2655,7 +2681,11 @@
       }, false);
 
       /*Start game*/
-      BTALinit(_ctx);
+      if (DEBUG) {
+        load();
+      } else {
+        BTALinit(_ctx);
+      }
       document.addEventListener("animationFinished", () => {
         load();
       });
